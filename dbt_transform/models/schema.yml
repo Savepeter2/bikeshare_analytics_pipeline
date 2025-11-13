@@ -1,0 +1,227 @@
+models:
+  - name: dim_user_type_tmp
+    description: "A temporary table that safely stores the dim_user_type data to run tests on."
+    tests:
+      - dbt_expectations.expect_table_columns_to_match_set:
+          column_list: ["user_type_id", "user_type"]
+    columns:
+      - name: user_type_id
+        description: "The unique identifier for each user type."
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: user_type
+        description: "The name of the user (member) type (e.g., 'Casual', 'Registered')."
+        tests:
+          - not_null
+          - unique
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+
+  - name: dim_rideable_type_tmp
+    description: "A temporary dimension table for rideable type attributes. Used to test the dim_rideable_type table."
+    tests:
+      - dbt_expectations.expect_table_columns_to_match_set:
+          column_list: ["rideable_type_id", "rideable_type"]
+    columns:
+      - name: rideable_type_id
+        description: "The unique identifier for each rideable type."
+        tests:
+          - not_null
+          - unique
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: rideable_type
+        description: "The type of rideable (e.g., 'electric_bike', 'docked_bike')."
+        tests:
+          - not_null
+          - unique
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+
+  - name: dim_date_tmp
+    description: "A dimension table for date attributes."
+    tests:
+      - dbt_expectations.expect_table_columns_to_match_set:
+          column_list: ["date_id", "date", "day_of_week"]
+    columns:
+      - name: date_id
+        description: "The unique identifier for each date."
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+  
+  - name: dim_station_tmp
+    description: "A temporary dimension table for bike station attributes. Used to test the dim_station table."
+    tests:
+      - dbt_expectations.expect_table_columns_to_match_set:
+          column_list: ["station_id", "station_name", "latitude", "longitude", "dbt_scd_id", "dbt_updated_at", "dbt_valid_from", "dbt_valid_to"]
+    columns:
+      - name: station_id
+        description: "The unique identifier for each bike station. station_id may not be unique because of SCD type 2 implementation."
+        tests:
+          - not_null
+          - unique
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: station_name
+        description: "The name of the bike station."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: latitude
+        description: "The latitude coordinate of the bike station."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+      - name: longitude
+        description: "The longitude coordinate of the bike station."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+      - name: dbt_scd_id
+        description: "The surrogate key for slowly changing dimension implementation."
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: dbt_updated_at
+        description: "The timestamp when the record was last updated."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp_ntz
+      - name: dbt_valid_from
+        description: "The timestamp when the record became valid."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp_ntz
+      - name: dbt_valid_to
+        description: "The timestamp when the record is no longer valid."
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp_ntz
+  
+  - name: fct_rides_tmp
+    description: "A fact table recording bike ride events."
+    tests:
+      - dbt_expectations.expect_table_columns_to_match_set:
+          column_list: ["ride_id", "start_station_id", "end_station_id", "date_id", "rideable_type_id", "user_type_id", "start_station_latitude", "start_station_longitude", "end_station_latitude", "end_station_longitude"]
+    columns:
+      - name: ride_id
+        description: "The unique identifier for each ride."
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: start_station_id
+        description: "The foreign key referencing the starting station in the dim_station table."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: end_station_id
+        description: "The foreign key referencing the ending station in the dim_station table. May be null if the station coordinates are missing"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: date_id
+        description: "The foreign key referencing the date of the ride in the dim_date table."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: rideable_type_id
+        description: "The foreign key referencing the rideable type in the dim_rideable_type table."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: user_type_id
+        description: "The foreign key referencing the user type in the dim_user_type table."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: varchar
+      - name: start_station_latitude
+        description: "The latitude coordinate of the starting station."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+      - name: start_station_longitude
+        description: "The longitude coordinate of the starting station."
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+      - name: end_station_latitude
+        description: "The latitude coordinate of the ending station. May be null if the station coordinates are missing"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+      - name: end_station_longitude
+        description: "The longitude coordinate of the ending station. May be null if the station coordinates are missing"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+
+  - name: stg_rides
+    description: "A staging table for raw bike ride data. It loads data directly from the source before transformation incrementally."
+    columns:
+      - name: ride_id
+        description: "The unique identifier for each ride."
+        tests:
+          - unique
+          - not_null 
+      - name: rideable_type
+        description: "The type of rideable (e.g., 'electric_bike', 'docked_bike')."
+        tests:
+          - not_null
+      - name: started_at
+        description: "The timestamp when the ride started."
+        tests:
+          - not_null
+      - name: ended_at
+        description: "The timestamp when the ride ended."
+        tests:
+          - not_null
+      - name: start_station_id
+        description: "The identifier for the starting station."
+        tests:
+          - not_null
+      - name: start_station_name
+        description: "The name of the starting station."
+        tests:
+          - not_null
+      - name: start_lat
+        description: "The latitude coordinate of the starting station."
+        tests:
+          - not_null
+      - name: start_lng
+        description: "The longitude coordinate of the starting station."
+        tests:
+          - not_null
+      - name: end_station_id
+        description: "The identifier for the ending station."
+      - name: end_station_name
+        description: "The name of the ending station."
+      - name: end_lat
+        description: "The latitude coordinate of the ending station."
+      - name: end_lng
+        description: "The longitude coordinate of the ending station."
+      - name: member_casual
+        description: "The type of user (e.g., 'member', 'casual')."
+        tests:
+          - not_null
+    
