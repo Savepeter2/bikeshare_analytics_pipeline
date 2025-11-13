@@ -1,0 +1,16 @@
+# --- dbt Compilation/Execution Artifacts ---
+target/           
+logs/    
+           
+# --- dbt Dependency Cache ---
+dbt_packages/       
+dbt_internal_packages/ 
+
+# --- Python Environment Files (if applicable) ---
+.venv/             
+__pycache__/        
+*.pyc              
+
+# --- Version Control Files ---
+.git                # Git repository metadata
+.gitignore          # This file itself (not strictly necessary to ignore, but good practice)
