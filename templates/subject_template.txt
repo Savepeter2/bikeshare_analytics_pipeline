@@ -1,0 +1,17 @@
+{# ---------- Determine Status and Emoji ---------- #}
+{% set is_retry = ti.try_number > 1 %}
+{% set is_success = ti.state == 'success' %}
+{% set status = 'SUCCESS' if is_success else ('RETRY' if is_retry else 'FAILED') %}
+
+{% if is_success %}
+    {% set emoji = '✅' %}
+{% elif is_retry %}
+    {% set emoji = '⚠️' %}
+{% else %}
+    {% set emoji = '❌' %}
+{% endif %}
+
+{# ---------- Build Subject ---------- #}
+{{ emoji }} {{ ti.dag_id }}.{{ ti.task_id }} — {{ status }}
+{% if is_retry %}(Attempt {{ ti.try_number }}){% endif %}
+| Run: {{ ti.execution_date.strftime('%Y-%m-%d %H:%M %Z') }}
