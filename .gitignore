@@ -173,15 +173,19 @@ pyrightconfig.json
 #data files
 *.csv
 *.parquet
+*.txt
 
 # local test files
 test_test.py
 test_1.ipynb
 steps.txt
 secrets.ini
+steps copy.txt
+storage_integration.sql
 
 # dbt files
 target/
 dbt_packages/
 logs/
 dbt_internal_packages/
+.user.yml
