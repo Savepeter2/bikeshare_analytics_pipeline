@@ -13,7 +13,8 @@ Base = declarative_base()
 
 @contextmanager
 def create_session(
-connection_string: str
+connection_string: str,
+session: sessionmaker = None
 ):
     try:
         engine = create_engine(connection_string)
@@ -21,10 +22,8 @@ connection_string: str
         Base.metadata.create_all(engine)
         session = Session()
         yield session
-        print("session", session)
     
     except Exception as e:
-        # print(f"Error occurred while connecting to snowflake: {database}. {schema}. Error: {e}")
         if session:
             session.rollback()
         raise e 
@@ -34,15 +33,13 @@ connection_string: str
             session.close()
 
 
-
-
 class BikeRide(Base):
     """
     ORM model for the bike rides staging table in Snowflake.
     """
     __tablename__ = 'raw_bike_rides'
     __table_args__ = {
-        'schema': 'RAW',
+        'schema': 'RAW', #will still change, has to be created at and updated at
         'comment': 'Bike sharing ride data from transformed S3 bucket'
     }
 
@@ -59,20 +56,41 @@ class BikeRide(Base):
     end_lat = Column(Float)
     end_lng = Column(Float)
     member_casual = Column(String(255))
-    # created_at = Column(DateTime, default=datetime.now)
-    # updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
     def __repr__(self):
         return f"<BikeRide(ride_id='{self.ride_id}', started_at='{self.started_at}')>"
 
 
-# ride_id = Column(String, primary_key=True, index=True)
-# member_casual = Column(String, index=True)     # user type
-# started_at = Column(DateTime, index=True)
-# start_station_id = Column(String, index=True)
-# end_station_id = Column(String, index=True)
+class AlertsLog(Base):
+    """
+    ORM model for persisting real-time flagged alerts in Snowflake.
+    """
+    __tablename__ = 'alerts_log'
+    __table_args__ = {
+        'schema': 'RAW',
+        'comment': 'Logs for alerts generated during data processing'
+    }
 
-# # Optional if needed:
-# rideable_type = Column(String, index=True)
-# ended_at = Column(DateTime, index=True)
+    id = Column(String(64), primary_key=True)
+    ride_id = Column(String(255), unique = True, nullable=False)
+    flag_type = Column(String(255), nullable=False)
+    rideable_type = Column(String(255), nullable=False)
+    started_at = Column(TIMESTAMP_NTZ, nullable=False)
+    ended_at = Column(TIMESTAMP_NTZ, nullable=False)
+    start_station_name = Column(String(255), nullable=False)
+    end_station_name = Column(String(255))
+    start_station_id = Column(Integer)
+    end_station_id = Column(Integer)
+    start_lat = Column(Float, nullable=False)
+    start_lng = Column(Float, nullable=False)
+    end_lat = Column(Float)
+    end_lng = Column(Float)
+    member_casual = Column(String(255), nullable=False)
+    created_at = Column(TIMESTAMP_NTZ, default=datetime.now)
+    updated_at = Column(TIMESTAMP_NTZ, default=datetime.now, onupdate=datetime.now)
+
+    def __repr__(self):
+        return f"<AlertsLog(id='{self.id}', ride_id='{self.ride_id}', flag_type='{self.flag_type}', started_at='{self.started_at}', created_at='{self.created_at}')>"
 
