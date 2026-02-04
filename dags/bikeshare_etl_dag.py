@@ -8,12 +8,12 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.utils.email import send_email
 from src.etl import (
+    get_batch_week_task,
     extract_and_validate_source_task,
-    load_raw_data_to_s3_task,
+    load_data_to_raw_bucket_task,
     process_raw_data_task,
     validate_processed_data_task,
     load_processed_data_to_s3_task,
-    update_checkpoint_variable_task,
     load_processed_s3_data_to_snowflake_task
 )
 from jinja2 import Template
@@ -62,60 +62,59 @@ def email_alert(context):
         })
 
 
-
 dag = DAG(
     'bikeshare_etl_dag',
     default_args={
         'owner': 'peter_de',
         'depends_on_past': False,
-        'start_date': pendulum.datetime(2025, 10, 31, tz="Africa/Lagos"),
-        'email': [AIRFLOW_MAIL_USERS],
-        'on_success_callback': email_alert,
-        'on_failure_callback': email_alert,
-        'on_retry_callback': email_alert,
+        'start_date': pendulum.datetime(2022, 12, 12, tz="Africa/Lagos"), #run for second week in december, - loads for week 48(1st week in december)
+        # 'email': [AIRFLOW_MAIL_USERS],
+        # 'on_success_callback': email_alert,
+        # 'on_failure_callback': email_alert,
+        # 'on_retry_callback': email_alert,
         'retries': 1,
         'max_active_runs': 1,
-        'retry_delay': timedelta(minutes=1)
+        'retry_delay': timedelta(minutes=2)
     },
-    description='Pipeline for Bikeshare data using Airflow',
-    schedule_interval=timedelta(minutes=60),
+    description='Weekly ETL for Capital Bikeshare Trips for December 2022',
+    schedule_interval='0 10 * * 1',  # At 10:00 AM every Monday
     catchup=False,
     tags=['bikeshare', 'rides', 'pipeline', 'snowflake', 'dbt']
 )
 
 t1 = PythonOperator(
+    task_id='get_batch_week',
+    python_callable=get_batch_week_task,
+    dag=dag
+)
+
+t2 = PythonOperator(
     task_id='extract_and_validate_source_data',
     python_callable=extract_and_validate_source_task,
     dag=dag
 )
 
-t2 = PythonOperator(
-    task_id='load_raw_data_to_s3',
-    python_callable=load_raw_data_to_s3_task,
+t3 = PythonOperator(
+    task_id='load_data_to_raw_bucket',
+    python_callable=load_data_to_raw_bucket_task,
     dag=dag
 )
 
-t3 = PythonOperator(
+t4 = PythonOperator(
     task_id='process_raw_data',
     python_callable=process_raw_data_task,
     dag=dag
 )
 
-t4 = PythonOperator(
+t5 = PythonOperator(
     task_id='validate_processed_data',
     python_callable=validate_processed_data_task,
     dag=dag
 )
 
-t5 = PythonOperator(
+t6 = PythonOperator(
     task_id='load_processed_data_to_s3',
     python_callable=load_processed_data_to_s3_task,
-    dag=dag
-)
-
-t6 = PythonOperator(
-    task_id='update_checkpoint_variable',
-    python_callable=update_checkpoint_variable_task,
     dag=dag
 )
 
@@ -125,19 +124,12 @@ t7 = PythonOperator(
     dag=dag
 )
 
-dbt_install_deps = BashOperator(
-    task_id='dbt_install_deps',
-    bash_command='cd /opt/airflow/dbt_transform && poetry run dbt deps --target dev',
-    dag=dag
-)
-
 dbt_run_staging = BashOperator(
     task_id='dbt_run_staging',
     bash_command='cd /opt/airflow/dbt_transform && poetry run dbt run -s staging --target dev',
     dag=dag
 )
 
-#always run snapshots before the temporary intermediate models to ensure SCDs are handled
 dbt_run_snapshots = BashOperator(
     task_id='dbt_snapshot',
     bash_command='cd /opt/airflow/dbt_transform && poetry run dbt snapshot --target dev',
@@ -162,4 +154,5 @@ dbt_run_final = BashOperator(
     dag=dag
 )
 
-t1 >> t2 >> t3 >> t4 >> t5 >> t6 >> t7 >> dbt_install_deps >> dbt_run_staging >> dbt_run_snapshots >> dbt_run_intermediate >> dbt_test_intermediate >> dbt_run_final
+
+t1 >> t2 >> t3 >> t4 >> t5 >> t6 >> t7 >> dbt_run_staging >> dbt_run_snapshots >> dbt_run_intermediate >> dbt_test_intermediate >> dbt_run_final
