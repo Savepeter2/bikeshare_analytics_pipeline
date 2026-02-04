@@ -21,12 +21,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    healthcheck:
-      test: ["CMD-SHELL", "airflow db check || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,7 +28,7 @@ services:
       - secrets.ini
     entrypoint: >
       bash -c "
-        airflow db init &&
+        airflow db init && 
         airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin
       "
     volumes:
@@ -102,26 +96,6 @@ services:
       - ./templates:/opt/airflow/templates
     command: scheduler
     restart: always
-
-  # airflow-worker:
-  #   image: bikeshare-airflow:latest
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   depends_on:
-  #     - airflow-init
-  #     - postgres
-  #   env_file:
-  #     - secrets.ini
-  #   volumes:
-  #     - ./dags:/opt/airflow/dags
-  #     - ./logs:/opt/airflow/logs
-  #     - ./data:/opt/airflow/data
-  #     - ./src:/opt/airflow/src
-  #     - ./configs:/opt/airflow/configs
-  #     - ./secrets.ini:/opt/airflow/secrets.ini
-  #   command: local worker
-  #   restart: always
 
 volumes:
   postgres_data:
