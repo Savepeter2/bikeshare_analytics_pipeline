@@ -10,6 +10,7 @@
     )
 }}
 
-SELECT * FROM {{ ref('stg_stations_current') }}
+SELECT *
+FROM {{ ref('stg_stations_current') }}
 
 {% endsnapshot %}

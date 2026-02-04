@@ -14,7 +14,7 @@ WITH src_stations AS (
         start_lat AS latitude, 
         start_lng AS longitude
     FROM BIKESHARE_DB.RAW.RAW_BIKE_RIDES
-    UNION
+    UNION ALL
     SELECT 
         end_station_id AS station_id, 
         end_station_name AS station_name, 
@@ -23,6 +23,7 @@ WITH src_stations AS (
     FROM BIKESHARE_DB.RAW.RAW_BIKE_RIDES
     WHERE end_station_id IS NOT NULL
 )
+
 SELECT DISTINCT 
     station_id,
     station_name,

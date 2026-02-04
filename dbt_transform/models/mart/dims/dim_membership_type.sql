@@ -1,4 +1,4 @@
--- depends_on: {{ ref('dim_user_type_tmp') }}
+-- depends_on: {{ ref('dim_membership_type_tmp') }}
 {{
     config(
         materialized='table',
@@ -7,12 +7,12 @@
         {% if execute and adapter.get_relation(
                 database=target.database,
                 schema=target.schema,
-                identifier='dim_user_type_tmp'
+                identifier='dim_membership_type_tmp'
             ) is not none %}
 
             DROP TABLE IF EXISTS {{ this }};
-            DROP TABLE IF EXISTS DIM_USER_TYPE_FINAL;
-            ALTER TABLE DIM_USER_TYPE_TMP RENAME TO DIM_USER_TYPE_FINAL;
+            DROP TABLE IF EXISTS DIM_MEMBERSHIP_TYPE_FINAL;
+            ALTER TABLE DIM_MEMBERSHIP_TYPE_TMP RENAME TO DIM_MEMBERSHIP_TYPE_FINAL;
         {% else %}
             DROP TABLE IF EXISTS {{ this }};
         {% endif %}

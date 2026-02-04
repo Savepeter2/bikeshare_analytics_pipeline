@@ -12,5 +12,7 @@ WITH src_rideable_type AS (
 
 SELECT
     rideable_type_id,
-    rideable_type
+    rideable_type,
+    CURRENT_TIMESTAMP() AS created_at,
+    CURRENT_TIMESTAMP() AS updated_at
 FROM src_rideable_type
