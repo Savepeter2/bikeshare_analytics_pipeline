@@ -3,16 +3,11 @@ import sys
 from typing import Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import configparser
-from airflow.models import Variable
 
 config = configparser.RawConfigParser()
 secrets_config = config.read('secrets.ini')
 
-LAST_ROW_INDEX = Variable.get("last_row_index", default_var=0)
-LAST_ROW_INDEX = int(LAST_ROW_INDEX)
-BATCH_SIZE = Variable.get("batch_size", default_var=20)
-# LAST_ROW_INDEX = 0
-# BATCH_SIZE = 5
+
 log_file_name = config['LOGGING']['log_file_name']
 error_log_file_name = config['LOGGING']['error_log_file_name']
 var_dir = config['LOGGING']['var_dir']
@@ -22,7 +17,12 @@ AWS_REGION = config['AWS_CREDENTIALS']['AWS_REGION']
 S3_RAW_BUCKET = config['AWS_CREDENTIALS']['S3_RAW_BUCKET']
 RAW_S3_KEY = config['AWS_CREDENTIALS']['RAW_S3_KEY']
 TRANSFORMED_BUCKET = config['AWS_CREDENTIALS']['TRANSFORMED_BUCKET']
+TRANSFORMED_BUCKET_FOLDER = config['AWS_CREDENTIALS']['TRANSFORMED_BUCKET_FOLDER']
+TRANSFORMED_BUCKET_METADATA_PREFIX = config['AWS_CREDENTIALS']['TRANSFORM_BUCKET_METADATA_PREFIX']
 RAW_DATA_PATH = config['LOCAL']['RAW_DATA_PATH']
+RAW_BUCKET_FOLDER = config['AWS_CREDENTIALS']['RAW_BUCKET_FOLDER']
+RAW_BUCKET_METADATA_PREFIX = config['AWS_CREDENTIALS']['RAW_BUCKET_METADATA_PREFIX']
+RAW_BUCKET_WEEKLY_DUMP_PREFIX = config['AWS_CREDENTIALS']['RAW_BUCKET_WEEKLY_DUMP_PREFIX']
 SNOWFLAKE_ACCOUNT = config['SNOWFLAKE']['snowflake_account']
 SNOWFLAKE_USERNAME = config['SNOWFLAKE']['snowflake_username']
 SNOWFLAKE_PASSWORD = config['SNOWFLAKE']['snowflake_password']
@@ -36,15 +36,26 @@ SOURCE_S3_KEY = config['AWS_CREDENTIALS']['SOURCE_S3_KEY']
 AIRFLOW_MAIL_USERS = config['AIRFLOW']['MAIL_USERNAMES']
 AIRFLOW_MAIL_SUBJECT_TEMPLATE = config['AIRFLOW_EMAIL']['AIRFLOW__EMAIL__SUBJECT_TEMPLATE']
 AIRFLOW_MAIL_HTML_TEMPLATE = config['AIRFLOW_EMAIL']['AIRFLOW__EMAIL__HTML_CONTENT_TEMPLATE']
+SLACK_BOT_OAUTH_TOKEN = config['SLACK']['SLACK_BOT_OAUTH_TOKEN']
+SLACK_CHANNEL_ID = config['SLACK']['CHANNEL_ID']
+SLACK_BOT_NAME = config['SLACK']['SLACK_BOT_NAME']  
+CHUNK_SIZE = int(config['ETL']['CHUNK_SIZE'])
 
 S3_CONFIG = {
-            'transformed_bucket': TRANSFORMED_BUCKET,
             'raw_bucket': S3_RAW_BUCKET,
+            'source_bucket': SOURCE_BUCKET,
+            'source_s3_key': SOURCE_S3_KEY,
             'access_key': AWS_ACCESS_KEY,
             'secret_key': AWS_SECRET_KEY,
-            'base_prefix': TRANSFORMED_BUCKET,
-            'raw_s3_key': RAW_S3_KEY
+            'transformed_bucket_metadata_prefix': TRANSFORMED_BUCKET_METADATA_PREFIX,
+            'transformed_bucket': TRANSFORMED_BUCKET,
+            'transformed_bucket_folder': TRANSFORMED_BUCKET_FOLDER,
+            'raw_s3_key': RAW_S3_KEY,
+            'raw_bucket_folder': RAW_BUCKET_FOLDER,
+            'raw_bucket_metadata_prefix': RAW_BUCKET_METADATA_PREFIX,
+            'raw_bucket_weekly_dump_prefix': RAW_BUCKET_WEEKLY_DUMP_PREFIX
         }
+
 SNOWFLAKE_CONFIG = {
     'snowflake_account': SNOWFLAKE_ACCOUNT,
     'snowflake_username': SNOWFLAKE_USERNAME,
