@@ -1,15 +1,15 @@
 import os
 import sys
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Generator
 import ast
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.utils import (validate_raw_data, impute_missing_station_ids,
                        extract_source_data,
                        raw_data_schema,
-                        validate_processed_data, clean_raw_data, InvalidArgumentTypeError)
+                       list_partitions, send_slack_alert, yield_event_stream, send_slack_alert,
+                        validate_processed_data, clean_raw_data, InvalidArgumentTypeError, MissingColumnError)
 from configs.logger_config import logger, error_logger
 from configs.config import (RAW_S3_KEY, RAW_DATA_PATH, S3_RAW_BUCKET,
-                            # LAST_ROW_INDEX, BATCH_SIZE,
                              SOURCE_BUCKET, SOURCE_S3_KEY,
                              AWS_ACCESS_KEY, AWS_SECRET_KEY, 
                             TRANSFORMED_BUCKET, 
@@ -28,15 +28,15 @@ from typing import List, Dict, Tuple, Set
 from sqlalchemy import text
 import numpy as np
 import io
+import hashlib
 import pyarrow as pa
 import pyarrow.parquet as pq
 from datetime import datetime, timedelta
 
 
-
 def extract_and_validate_source_data(
         aws_access_key: str,
-        aws_secret_access: str,
+        aws_secret_access: str, 
         source_bucket: str,
         source_s3_key: str,
         raw_bucket: str,
@@ -88,7 +88,7 @@ def extract_and_validate_source_data(
                 chunk_size,
                 raw_data_schema
             )
-
+        
         if extract_source_data_status['status'] != 'success':
             raise Exception({
                 "status": "error",
@@ -112,7 +112,7 @@ def extract_and_validate_source_data(
             aws_secret_access_key=aws_secret_access
         )
         extracted_dump_s3_key = f"{raw_bucket_weekly_dump_prefix}/trips_year_{batch_year}_week_{batch_week}.csv"
-        s3_client.put_object(
+        dump_raw_data = s3_client.put_object(
             Bucket=raw_bucket,
             Key=extracted_dump_s3_key,
             Body=raw_df.to_csv(index=False)
@@ -140,14 +140,15 @@ def extract_and_validate_source_data(
 
         error_logger.error({
             "status": "error",
-            "message": "An error occurred while extracting and validating raw data",
+            "message": "An error occurred while extracting and validating source data",
             "error": f_error
         })
         raise Exception({
             "status": "error",
-            "message": "An error occurred while extracting and validating raw data",
+            "message": "An error occurred while extracting and validating source data",
             "error": f_error
         })
+
 
 class LoadToRawS3:
     def __init__(self, s3_config: Dict) -> None:
@@ -299,10 +300,17 @@ class LoadToRawS3:
                 raise InvalidArgumentTypeError("partition_week must be a string")
             
             metadata_key = f"{self.raw_bucket_metadata_prefix}/year={partition_year}/week={partition_week}/ride_ids.parquet"
+            print("metadata_key", metadata_key)
             response = self.s3_client.get_object(Bucket=self.raw_bucket, Key=metadata_key)
+            print("response", response)
             parquet_data = response['Body'].read()  
             parquet_buffer = io.BytesIO(parquet_data)
             df = pd.read_parquet(parquet_buffer)
+            
+            if 'id' not in df.columns:
+                raise MissingColumnError("The required column 'id' is missing from the metadata parquet file")
+
+
             ride_ids = set(df['id'].tolist())
 
             logger.info(
@@ -317,12 +325,13 @@ class LoadToRawS3:
                 "ride_ids": ride_ids
             }
         
-        except self.s3_client.exceptions.NoSuchKey as e:
-            return {
-            "status": "success",
-            "message": f"No ride IDs found for partition year: {partition_year}, partition week: {partition_week}, returning empty set",
-            "ride_ids": set()
-        }
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchKey":
+                return {
+                "status": "success",
+                "message": f"No ride IDs found for partition year: {partition_year}, partition week: {partition_week}, returning empty set",
+                "ride_ids": set()
+            }
 
         except Exception as e:
             try:
@@ -365,18 +374,6 @@ class LoadToRawS3:
                 raise InvalidArgumentTypeError("new_ride_ids must be a set")
             
             get_existing_ids = self.get_ride_ids_from_metadata(partition_year, partition_week)
-
-            if get_existing_ids['status'] == 'error':
-                logger.error({
-                    "status": "error",
-                    "message": f"Failed to retrieve existing ride IDs for {partition_year}, {partition_week}",
-                    "error": get_existing_ids
-                })
-                return {
-                    "status": "error",
-                    "message": f"Failed to retrieve existing ride IDs for {partition_year}, {partition_week}",
-                    "error": get_existing_ids
-                }
             
             existing_ids = get_existing_ids['ride_ids']
             all_ids = existing_ids.union(new_ride_ids)
@@ -397,13 +394,13 @@ class LoadToRawS3:
 
             logger.info({
                 "status": "success",
-                "message": f"Updated ride IDs for {partition_year}, {partition_week}",
+                "message": f"successfully updated ride IDs metadata for partition_year: {partition_year}, partition_week: {partition_week}",
                 "updated_ids_count": len(all_ids)
             })
 
             return {
                 "status": "success",
-                "message": f"Updated ride IDs for {partition_year}, {partition_week}",
+                "message": f"successfully updated ride IDs metadata for partition_year: {partition_year}, partition_week: {partition_week}",
                 "updated_ids_count": len(all_ids)
             }
     
@@ -414,12 +411,12 @@ class LoadToRawS3:
                 f_error = str(e)
             logger.error({
                 "status": "error",
-                "message": f"An error occurred while updating ride IDs for {partition_year}, {partition_week}",
+                "message": f"An error occurred while updating ride IDs metadata for partition_year: {partition_year}, partition_week: {partition_week}",
                 "error": f_error
             })
             raise Exception({
                 "status": "error",
-                "message": f"An error occurred while updating ride IDs for {partition_year}, {partition_week}",
+                "message": f"An error occurred while updating ride IDs metadata for partition_year: {partition_year}, partition_week: {partition_week}",
                 "error": f_error
             })
     
@@ -448,25 +445,23 @@ class LoadToRawS3:
                 raise InvalidArgumentTypeError("batch_week must be a string")
 
             if not rides_df.empty:
-                # rides_df['start_datetime'] = pd.to_datetime(rides_df['started_at'], errors='coerce')
-                # rides_df['partition_year'] = rides_df['start_datetime'].dt.strftime('%Y')
-                # rides_df['partition_week'] = rides_df['start_datetime'].dt.strftime('%U')
                 new_data_list = []
                 existing_ids_list = []
 
                 get_existing_ids = self.get_ride_ids_from_metadata(batch_year, batch_week)
+                print("get_existing_ids", get_existing_ids)
 
-                if get_existing_ids['status'] == 'error':
-                    logger.error({
-                        "status": "error",
-                        "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
-                        "error": get_existing_ids
-                    })
-                    return {
-                        "status": "error",
-                        "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
-                        "error": get_existing_ids
-                    }
+                # if get_existing_ids['status'] == 'error':
+                #     logger.error({
+                #         "status": "error",
+                #         "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
+                #         "error": get_existing_ids
+                #     })
+                #     return {
+                #         "status": "error",
+                #         "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
+                #         "error": get_existing_ids
+                #     }
                 
                 existing_ids = get_existing_ids['ride_ids']
 
@@ -523,12 +518,12 @@ class LoadToRawS3:
                 f_error = str(e)
             logger.error({
                 "status": "error",
-                "message": "An error occurred while filtering duplicate rides",
+                "message": f"An error occurred while filtering duplicate rides for batch year: {batch_year}, batch week: {batch_week}",
                 "error": f_error
             })
             raise Exception({
                 "status": "error",
-                "message": "An error occurred while filtering duplicate rides",
+                "message": f"An error occurred while filtering duplicate rides for batch year: {batch_year}, batch week: {batch_week}",
                 "error": f_error
             })
     
@@ -552,6 +547,12 @@ class LoadToRawS3:
         try:
             if not isinstance(new_rides_df, pd.DataFrame):
                 raise InvalidArgumentTypeError("rides_df must be a pandas DataFrame")
+            
+            if not isinstance(partition_year, str):
+                raise InvalidArgumentTypeError("partition_year must be a string")
+            
+            if not isinstance(partition_week, str):
+                raise InvalidArgumentTypeError("partition_week must be a string")
             
             if new_rides_df.empty:
                 logger.info({
@@ -605,14 +606,14 @@ class LoadToRawS3:
                 "error": f_error
             })
     
-    def load_raw_data_with_partitioning(
+    def load_raw_data(
         self, 
         extracted_dump_s3_key: str,
         batch_year: str,
         batch_week: str
     ) -> Dict:
         """
-        Loads raw data to S3 with partitioning and deduplication.
+        Loads raw data to S3 with deduplication.
         
         Args:
             extracted_dump_s3_key: S3 key of the extracted raw data dump
@@ -626,9 +627,17 @@ class LoadToRawS3:
         try:
             if not isinstance(extracted_dump_s3_key, str):
                 raise InvalidArgumentTypeError("extracted_dump_s3_key must be a string")
+        
+            if not isinstance(batch_year, str):
+                raise InvalidArgumentTypeError("batch_year must be a string")
+            
+            if not isinstance(batch_week, str):
+                raise InvalidArgumentTypeError("batch_week must be a string")
             
             response = self.s3_client.get_object(Bucket=self.raw_bucket, 
                                                 Key=extracted_dump_s3_key)
+
+            print('response', response)
             
             extracted_raw_data = response['Body']
             extracted_raw_df = pd.read_csv(extracted_raw_data)
@@ -636,6 +645,7 @@ class LoadToRawS3:
             filter_status = self.filter_duplicate_rides(extracted_raw_df,
                                                         batch_year,
                                                     batch_week)
+            # print("filter_status", filter_status)
 
             if filter_status['status'] == 'error':
                 logger.error({
@@ -680,13 +690,15 @@ class LoadToRawS3:
                     "error": upload_status
                 }
             )
-            
+                
             update_ride_ids_status = self.update_ride_ids_metadata(
                 batch_year,
                 batch_week,
                 extracted_ride_ids
-            )
+            )     
 
+            print("update_ride_ids_status", update_ride_ids_status)  
+            
             if update_ride_ids_status['status'] == 'error':
                 logger.error({
                     "status": "error",
@@ -701,7 +713,7 @@ class LoadToRawS3:
             
             logger.info({
                 "status": "success",
-                "message": f"Successfully loaded raw data with partitioning for year: {batch_year}, week: {batch_week}",
+                "message": f"Successfully loaded raw data to raw bucket for year: {batch_year}, week: {batch_week}",
                 "uploaded_records": upload_status['uploaded_records'],
                 "updated_ride_ids_count": update_ride_ids_status['updated_ids_count']
             })
@@ -908,6 +920,7 @@ class LoadToTransformedS3:
             
             metadata_key = f"{self.duplicate_tracker_prefix}/{partition_year}/processed_ids.parquet"
             response = self.s3_client.get_object(Bucket=self.transformed_bucket, Key=metadata_key)
+            print("response", response)
             parquet_data = response['Body'].read()  
             parquet_buffer = io.BytesIO(parquet_data)
             df = pd.read_parquet(parquet_buffer)
@@ -925,12 +938,13 @@ class LoadToTransformedS3:
                 "processed_ids": processed_ids
             }
         
-        except self.s3_client.exceptions.NoSuchKey as e:
-            return {
-            "status": "success",
-            "message": f"No processed ride IDs found for partition year: {partition_year}, returning empty set",
-            "processed_ids": set()
-        }
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchKey":
+                return {
+                "status": "success",
+                "message": f"No processed ride IDs found for partition year: {partition_year}, returning empty set",
+                "processed_ids": set()
+            }
 
         except Exception as e:
             logger.error({
@@ -1048,6 +1062,7 @@ class LoadToTransformedS3:
 
                 for partition_year, group in rides_df.groupby('partition_year'):
                     get_existing_ids = self.get_processed_ride_ids_from_metadata(partition_year)
+                    print("get_existing_ids", get_existing_ids)
 
                     if get_existing_ids['status'] == 'error':
                         logger.error({
@@ -1316,7 +1331,7 @@ class LoadToTransformedS3:
                     "message": "An error occurred while retrieving extracted raw data dump from raw bucket",
                     "error": "No data found in S3 for the given key"
                 })
-            
+
             clean_data_status = clean_raw_data(raw_data_df)
             if clean_data_status['status'] != 'success':
                 raise Exception({
@@ -1327,6 +1342,8 @@ class LoadToTransformedS3:
             
             cleaned_data = clean_data_status["data"]
 
+            print("cleaned_data head", cleaned_data.to_dict(orient='records')[:5])
+
             process_station_data_status = impute_missing_station_ids(cleaned_data, batch_size=100)
             if process_station_data_status['status'] != 'success':
                 raise Exception({
@@ -1335,6 +1352,7 @@ class LoadToTransformedS3:
                     "error": process_station_data_status['error']
                 })
             processed_data = process_station_data_status['data']
+            print("processed_data head", processed_data.to_dict(orient='records')[:5])
             date_time_now = date_time_now or datetime.now()
             #save this processed data to a parquet format in S3
             s3_key = f"processed_data/processed_bikeshare_{date_time_now.strftime('%Y%m%d_%H%M%S')}.parquet"
@@ -1656,6 +1674,226 @@ class LoadTransformedDataToSnowflake:
                 "message": "An error occurred while loading data from stage to table",
                 "error": formatted_error
             })
+
+
+def process_stream(
+                   raw_s3_config: Dict,
+                   snowflake_config: Dict,
+                   channel_id: str,
+                   oauth_token: str,
+                   slack_bot_name: str,
+                   delay_seconds: int = 2, 
+                   chunk_size: int = 10) -> Generator[Dict, None, None]:
+    """
+    Processes a simulated real-time event stream by by reading batch data from raw s3 bucket, and simulates a real-time streaming by yields flagged events based on certain conditions. 
+    It also sends alerts to a specified Slack channel for flagged events and writes them to Snowflake.
+
+    Args:
+        data_path (str): The path to the raw data CSV file.
+        snowflake_config (Dict): Configuration dictionary for Snowflake connection.
+        channel_id (str): Slack channel ID to send alerts to.
+        oauth_token (str): OAuth token for Slack authentication.
+        slack_bot_name (str): Name of the Slack bot sending alerts.
+        delay_seconds (int): The delay in seconds between yielding each line.
+        chunk_size (int): The number of lines to read at once.
+
+    Yields:
+        dict: A dictionary representing a single row from the CSV file.
+    """
+    try:
+        if not isinstance(snowflake_config, dict):
+            raise InvalidArgumentTypeError("snowflake_config argument must be a dictionary")
+        if not isinstance(channel_id, str):
+            raise InvalidArgumentTypeError("channel_id argument must be a string")
+        if not isinstance(oauth_token, str):
+            raise InvalidArgumentTypeError("oauth_token argument must be a string")
+        if not isinstance(slack_bot_name, str):
+            raise InvalidArgumentTypeError("slack_bot_name argument must be a string")
+        if not isinstance(delay_seconds, int):
+            raise InvalidArgumentTypeError("delay_seconds argument must be an integer")
+        if not isinstance(chunk_size, int):
+            raise InvalidArgumentTypeError("chunk_size argument must be an integer")
+
+        flagged_long_events_cnt = 0
+        flagged_midnight_events_cnt = 0
+        flagged_events_cnt = 0
+
+        raw_bucket = raw_s3_config['raw_bucket']
+        raw_bucket_prefix = raw_s3_config['raw_bucket_folder']
+        access_key = raw_s3_config['access_key']
+        secret_key = raw_s3_config['secret_key']
+
+        for event in yield_event_stream(raw_bucket=raw_bucket,
+                                        raw_bucket_prefix=raw_bucket_prefix,
+                                        aws_access_key=access_key,
+                                        aws_secret_key=secret_key,
+                                        chunk_size=chunk_size,
+                                        delay_seconds=delay_seconds):
+            
+            start_time = pd.to_datetime(event['started_at'])
+            end_time = pd.to_datetime(event['ended_at'])
+                                            
+            duration_minutes = (end_time - start_time).total_seconds() / 60.0
+            event['duration_minutes'] = duration_minutes
+            rider_type = event['member_casual']
+            start_hour = start_time.hour
+            
+            #stream flagged events: trips greater than 45 minutes
+            if duration_minutes > 45:
+                event['flag_type'] = 'exceeded_45_minutes'
+                formatted_msg = f"""
+                ⚠️*Ride Alert!*
+            
+                *Ride ID:* {event['ride_id']}
+                *Member Type:* {event['member_casual']}
+                *Flag Type:* {event['flag_type']}
+                *Start Time:* {event['started_at']}
+                *End Time:* {event['ended_at']}
+                *Duration:* {event['duration_minutes']:.1f} mins
+                *Timestamp:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                """
+                ride_id = event['ride_id']
+                event['id'] = hashlib.sha256(ride_id.encode()).hexdigest()
+                send_alert_status = send_slack_alert(
+                    message=formatted_msg,
+                    channel=channel_id,
+                    oauth_token=oauth_token,
+                    slack_bot=slack_bot_name
+                )
+                if send_alert_status['status'] == 'error':
+                    error_logger.error({
+                        "status": "error",
+                        "message": "Failed to send alert for long trip event",
+                        "error": send_alert_status['error']
+                    })
+                    raise Exception(send_alert_status)
+
+
+                # existing_ids = []
+                # #read the file to check if event id already exists
+                # if os.path.exists("flagged_event_ids.txt"):
+                #     with open("flagged_event_ids.txt", "r") as f:
+                #         existing_ids = f.read().splitlines()
+                
+                # if event['id'] not in existing_ids:
+                #     write_snowflake_status = write_flagged_event_to_snowflake(
+                #         event=event,
+                #         snowflake_config=snowflake_config
+                #     )
+                #     logger.info("written flagged event to snowflake")
+
+                
+                # if write_snowflake_status['status'] == 'error':
+                #     error_logger.error({
+                #         "status": "error",
+                #         "message": "Failed to write flagged event to Snowflake",
+                #         "error": write_snowflake_status['error']
+                #     })
+                #     raise Exception(write_snowflake_status)
+                
+                #write the ids to a file path
+                with open("flagged_event_ids.txt", "a") as f:
+                    f.write(f"{event['id']}\n")
+                flagged_long_events_cnt += 1
+            
+            #stream midnight rides for casual riders
+            if rider_type == 'casual' and (start_hour >= 0 and start_hour < 6):
+                event['flag_type'] = 'midnight_ride_casual'
+                formatted_msg = f"""
+                ⚠️*Ride Alert!*
+
+                *Ride ID:* {event['ride_id']}
+                *Member Type:* {event['member_casual']}
+                *Start Time:* {event['started_at']}
+                *End Time:* {event['ended_at']}
+                *Flag Type:* {event['flag_type']}
+                *Duration:* {event['duration_minutes']:.1f} mins
+                *Timestamp:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                """
+                send_alert_status = send_slack_alert(
+                    message=formatted_msg,
+                    channel=channel_id,
+                    oauth_token=oauth_token,
+                    slack_bot=slack_bot_name
+                )
+                if send_alert_status['status'] == 'error':
+                    error_logger.error({
+                        "status": "error",
+                        "message": "Failed to send alert for midnight casual ride event",
+                        "error": send_alert_status['error']
+                    })
+                    raise Exception(send_alert_status)
+                
+            #     ride_id = event['ride_id']
+            #     event['id'] = hashlib.sha256(ride_id.encode()).hexdigest()
+            #     existing_ids = []
+            #     #read the file to check if event id already exists
+            #     if os.path.exists("flagged_event_ids.txt"):
+            #         with open("flagged_event_ids.txt", "r") as f:
+            #             existing_ids = f.read().splitlines()
+                
+
+            #     if event['id'] not in existing_ids:
+            #         #write to snowflake
+            #         write_snowflake_status = write_flagged_event_to_snowflake(
+            #             event=event,
+            #             snowflake_config=snowflake_config
+            #         )
+            #         logger.info("written flagged event to snowflake")
+
+            #     # if write_snowflake_status['status'] == 'error':
+            #     #     error_logger.error({
+            #     #         "status": "error",
+            #     #         "message": "Failed to write flagged event to Snowflake",
+            #     #         "error": write_snowflake_status['error']
+            #     #     })
+            #     #     raise Exception(write_snowflake_status)
+
+            #     #write the ids to a file path
+            #     with open("flagged_event_ids.txt", "a") as f:
+            #         f.write(f"{event['id']}\n")
+            #     flagged_midnight_events_cnt += 1
+            
+            flagged_events_cnt = flagged_long_events_cnt + flagged_midnight_events_cnt
+                
+        logger.info({
+            "status": "success",
+            "message": "Long trip processed and flagged successfully",
+            "midnight_events_count": flagged_midnight_events_cnt,
+            "long_events_count": flagged_long_events_cnt,
+            "flagged_events_count": flagged_events_cnt
+        })
+        return {
+            "status": "success",
+            "message": "Long trip processed and flagged successfully",
+            "midnight_events_count": flagged_midnight_events_cnt,
+            "long_events_count": flagged_long_events_cnt,
+            "flagged_events_count": flagged_events_cnt
+        }
+
+    except Exception as e:
+        error_logger.error({
+            "status": "error",
+            "message": "An error occurred while processing event stream from raw data",
+            "error": str(e)
+        })
+        raise Exception({
+            "status": "error",
+            "message": "An error occurred while processing event stream from raw data",
+            "error": str(e)
+        })
+
+
+# process_stream(
+#     raw_s3_config=S3_CONFIG,
+#                 snowflake_config=SNOWFLAKE_CONFIG,
+#                channel_id=SLACK_CHANNEL_ID,
+#                oauth_token=SLACK_BOT_OAUTH_TOKEN,
+#                slack_bot_name=SLACK_BOT_NAME,
+#                delay_seconds=2, 
+#                chunk_size=100
+#                )
+
  
 
 # chunk_size = CHUNK_SIZE
@@ -1848,7 +2086,7 @@ def load_data_to_raw_bucket_task(**context) -> None:
     
     load_to_raw_buk_obj = LoadToRawS3(S3_CONFIG)
     
-    load_to_raw_buk_obj.load_raw_data_with_partitioning(
+    load_to_raw_buk_obj.load_raw_data(
         extracted_dump_s3_key,
         batch_year,
         batch_week
