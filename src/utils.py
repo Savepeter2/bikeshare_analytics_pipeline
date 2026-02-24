@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Union, Optional, Generator
 
 from configs.logger_config import error_logger, logger
-from configs.config import SLACK_BOT_OAUTH_TOKEN, SLACK_CHANNEL_ID, SLACK_BOT_NAME, SNOWFLAKE_CONFIG
+from configs.config import SLACK_BOT_OAUTH_TOKEN, SLACK_CHANNEL_ID, SLACK_BOT_NAME, SNOWFLAKE_CONFIG, S3_CONFIG
 from src.models import create_session, AlertsLog
 from sqlalchemy import text
 import requests
@@ -27,6 +27,7 @@ import ast
 from typing import Set, Dict
 from io import BytesIO
 import io
+from io import StringIO
 from datetime import datetime
 import great_expectations as ge
 from requests.sessions import Session
@@ -39,6 +40,12 @@ from slack_sdk.errors import SlackApiError
 class InvalidArgumentTypeError(ValueError):
     """
     Custom exception for handling invalid argument types
+    """
+    pass
+
+class MissingColumnError(Exception):
+    """
+    Custom exception for handling missing columns in the dataframe
     """
     pass
 
@@ -153,6 +160,7 @@ def extract_source_data(
                 aws_access_key_id=aws_access_key,
                 aws_secret_access_key=aws_secret_key
             )
+        
 
         response = s3_client.get_object(Bucket=source_bucket, Key=source_s3_key)
         source_data = response['Body']
@@ -178,7 +186,7 @@ def extract_source_data(
             raw_df = pd.concat([raw_df, filtered_chunk], ignore_index=True)
             break #only process first chunk for testing purposes
 
-        if raw_df.empty == True:
+        if raw_df.empty:
             logger.info({
                 "status": "success",
                 "message": f"No data found for {batch_year}-W{batch_week} in source s3 bucket: {source_bucket}",
@@ -1022,45 +1030,178 @@ def validate_processed_data(s3_config: Dict,
             "error": gexp_error
         })
 
-def event_stream(raw_data_path: str, 
-                delay_seconds: int,
-                chunk_size: int) -> Generator[str, None, None]:
+def list_partitions(bucket: str,
+                    raw_bucket_prefix: str,
+                    access_key: str,
+                    secret_key: str) -> dict[tuple, list[str]]:
     """
-    Simulates a real-time event stream by reading a CSV file line by line with a delay.
+    This function lists the partitions in the raw S3 bucket based on the specified prefix and returns a dictionary keyed by (year, week) with sorted ingestion_ts paths.
 
     Args:
-        raw_data_path (str): The path to the raw data CSV file.
-        delay_seconds (int): The delay in seconds between yielding each line.
-        chunk_size (int): The number of lines to read at once.
+        bucket (str): The name of the S3 bucket.
+        raw_bucket_prefix (str): The prefix/folder in the S3 bucket where the data is stored.
+        access_key (str): The AWS access key for authentication.
+        secret_key (str): The AWS secret key for authentication.
 
-    Yields:
-        dict: A dictionary representing a single row from the CSV file.
+    Returns:
+        dict: A dictionary containing the status, message, and a nested dictionary keyed by (year, week) with sorted ingestion timestamp paths.
+
+        Example of returned partitions structure:
+        partitions = {
+            ('2022', '48'): [
+                ('2026-02-03T20-11-44Z',
+                'trips/year=2022/week=48/day=Mon/ingestion_ts=2026-02-03T20-11-44Z/trips.csv'),
+                ('2026-02-04T09-10-00Z',
+                'trips/year=2022/week=48/day=Mon/ingestion_ts=2026-02-04T09-10-00Z/trips.csv')
+            ]
+        }
+
     """
     try:
-        if not isinstance(raw_data_path, str):
-            raise InvalidArgumentTypeError("Input raw_data_path must be a string")
-        if not isinstance(delay_seconds, int):
-            raise InvalidArgumentTypeError("Input delay_seconds must be an integer")
-        if not isinstance(chunk_size, int):
-            raise InvalidArgumentTypeError("Input chunk_size must be an integer")
+        if not isinstance(bucket, str):
+            raise InvalidArgumentTypeError("bucket argument must be a string")
+        if not isinstance(raw_bucket_prefix, str):
+            raise InvalidArgumentTypeError("raw_bucket_prefix argument must be a string")
+        if not isinstance(access_key, str):
+            raise InvalidArgumentTypeError("access_key argument must be a string")
+        if not isinstance(secret_key, str):
+            raise InvalidArgumentTypeError("secret_key argument must be a string")
         
-        for chunk in pd.read_csv(raw_data_path, chunksize=chunk_size):
-            for _, row in chunk.iterrows():
-                event = row.to_dict()
-                yield event
-                time.sleep(delay_seconds)
-            break
+        s3_client = boto3.client("s3",
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key)
 
+        print("s3_client", s3_client)
+        
+        paginator = s3_client.get_paginator("list_objects_v2")
+        
+        partitions: dict[tuple, list[str]] = {}
+        
+        for page in paginator.paginate(Bucket=bucket, Prefix=raw_bucket_prefix):
+            print("page", page)
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                print('key', key)
+
+                key_match = re.search(
+                    r"year=(\d+)/week=(\d+)/ingestion_ts=([\w\-:T]+Z)/",
+                    key
+                )
+                if key_match and key.endswith(".csv"):
+                    year, week, ts = key_match.group(1), key_match.group(2), key_match.group(3)
+                    partition_key = (year, week)
+                    partitions.setdefault(partition_key, [])
+                    partitions[partition_key].append((ts, key))
+
+        for year_week_key in partitions:
+            partitions[year_week_key].sort(key=lambda x: x[0])
+        
+        logger.info({
+            "status": "success",
+            "message": f"Successfully listed partitions in bucket: {bucket} with folder: {raw_bucket_prefix}",
+            "partitions": partitions
+        })
+
+        return {
+            "status": "success",
+            "message": f"Successfully listed partitions in bucket: {bucket} with folder: {raw_bucket_prefix}",
+            "partitions": partitions
+        }
     except Exception as e:
+        try:
+            exc_error = ast.literal_eval(str(e))
+        except SyntaxError as se:
+            exc_error = str(e)
         error_logger.error({
             "status": "error",
-            "message": "An error occurred while creating event stream from raw data",
-            "error": str(e)
+            "message": f"An error occurred while listing partitions in bucket: {bucket} with folder: {raw_bucket_prefix}",
+            "error": exc_error
         })
         raise Exception({
             "status": "error",
-            "message": "An error occurred while creating event stream from raw data",
-            "error": str(e)
+            "message": f"An error occurred while listing partitions in bucket: {bucket} with folder: {raw_bucket_prefix}",
+            "error": exc_error
+        })
+
+
+def yield_event_stream(raw_bucket: str,
+                            raw_bucket_prefix: str,
+                            aws_access_key: str,
+                            aws_secret_key: str,
+                            chunk_size: str,
+                            delay_seconds: int) -> Generator[Dict, None, None]:
+    """
+    This function reads the latest data for each (year, week) partition from the raw S3 bucket and yields each row as a dictionary with additional metadata.
+    For each (year, week), reads ONLY the latest ingestion run.
+    This is an idempotency guard against reruns.
+
+    Args:
+        raw_bucket (str): The name of the raw S3 bucket.
+        raw_bucket_prefix (str): The prefix/folder in the raw S3 bucket where the
+                            data is stored.
+        aws_access_key (str): The AWS access key for authentication.
+        aws_secret_key (str): The AWS secret key for authentication.
+        chunk_size (int): The number of lines to read at once from the CSV file.
+        delay_seconds (int): The delay in seconds between yielding each line to simulate real-time data streaming.
+    
+    Yields:
+        dict: A dictionary representing a single row from the CSV file, enriched with '_year', '_week', and '_ingestion_ts' metadata.
+    """
+    try:
+        if not isinstance(raw_bucket, str):
+            raise InvalidArgumentTypeError("raw_bucket argument must be a string")
+
+        if not isinstance(raw_bucket_prefix, str):
+            raise InvalidArgumentTypeError("raw_bucket_prefix argument must be a string")
+        
+        if not isinstance(aws_access_key, str):
+            raise InvalidArgumentTypeError("aws_access_key argument must be a string")
+        
+        if not isinstance(aws_secret_key, str):
+            raise InvalidArgumentTypeError("aws_secret_key argument must be a string")
+
+        if not isinstance(chunk_size, int) or chunk_size <= 0:
+            raise InvalidArgumentTypeError("chunk_size argument must be a positive integer")
+        
+        if not isinstance(delay_seconds, int) or delay_seconds < 0:
+            raise InvalidArgumentTypeError("delay_seconds argument must be a non-negative integer")
+        
+        s3_client = boto3.client("s3",
+                    aws_access_key_id=aws_access_key,
+                    aws_secret_access_key=aws_secret_key)
+        list_partitions_status = list_partitions(raw_bucket, raw_bucket_prefix, aws_access_key, aws_secret_key)
+        partitions = list_partitions_status["partitions"]
+
+        for (year, week), ts_key_pairs in partitions.items():
+            latest_ts, latest_key = ts_key_pairs[-1]  
+            
+            obj = s3_client.get_object(Bucket=raw_bucket, Key=latest_key)
+            body = obj["Body"].read().decode("utf-8")
+            
+            for chunk in pd.read_csv(StringIO(body), chunksize=chunk_size):
+                for _, row in chunk.iterrows():
+                    event = row.to_dict()
+                    event['_year'] = year
+                    event['_week'] = week
+                    event['_ingestion_ts'] = latest_ts
+                    yield event
+                    time.sleep(delay_seconds)
+
+    except Exception as e:
+        try:
+            exc_error = ast.literal_eval(str(e))
+        except SyntaxError as se:
+            exc_error = str(e)
+        error_logger.error({
+            "status": "error",
+            "message": "An error occurred while yielding event stream from S3",
+            "error": exc_error
+        })
+        raise Exception({
+            "status": "error",
+            "message": "An error occurred while yielding event stream from S3",
+            "error": exc_error
+
         })
     
 def send_slack_alert(
@@ -1142,325 +1283,151 @@ def write_flagged_event_to_snowflake(event: Dict,
     Returns:
         Dict: A dictionary containing the status and message of the operation.
     """
-    # try:
-    if not isinstance(event, dict):
-        raise InvalidArgumentTypeError("event argument must be a dictionary")
-    if not isinstance(snowflake_config, dict):
-        raise InvalidArgumentTypeError("snowflake_config argument must be a dictionary")
-    
-    user = snowflake_config['snowflake_username']
-    password = snowflake_config['snowflake_password']
-    account = snowflake_config['snowflake_account']
-    database = snowflake_config['snowflake_database']
-    schema = snowflake_config['snowflake_schema']
-    warehouse = snowflake_config['snowflake_warehouse']
-    role = snowflake_config['snowflake_role']
-
-    conn_string = f"snowflake://{user}:{password}@{account}/{database}/{schema}?warehouse={warehouse}&role={role}"
-    alerts_schema = AlertsLog.__table_args__['schema']
-    table_name = AlertsLog.__tablename__
-
-    with create_session(conn_string) as db:
-
-            sql_query = text(f"""
-                INSERT INTO {database}.{alerts_schema}.{table_name} (
-                    id,
-                    ride_id,
-                    flag_type,
-                    rideable_type,
-                    started_at,
-                    ended_at,
-                    start_station_name,
-                    start_station_id,
-                    end_station_name,
-                    end_station_id,
-                    start_lat,
-                    start_lng,
-                    end_lat,
-                    end_lng,
-                    member_casual,
-                    created_at,
-                    updated_at
-                )
-                VALUES (
-                    :id,
-                    :ride_id,
-                    :flag_type,
-                    :rideable_type,
-                    :started_at,
-                    :ended_at,
-                    :start_station_name,
-                    :start_station_id,
-                    :end_station_name,
-                    :end_station_id,
-                    :start_lat,
-                    :start_lng,
-                    :end_lat,
-                    :end_lng,
-                    :member_casual,
-                    CURRENT_TIMESTAMP()::timestamp_ntz,
-                    CURRENT_TIMESTAMP()::timestamp_ntz
-                )
-                    """
-                    )
-                        
-            execute_query = db.execute(sql_query,
-                {
-                    'id': event['id'],
-                    'ride_id': event['ride_id'],
-                    'flag_type': event['flag_type'],
-                    'rideable_type': event['rideable_type'],
-                    'started_at': event['started_at'],
-                    'ended_at': event['ended_at'],
-                    'start_station_name': event['start_station_name'],
-                    'start_station_id': event['start_station_id'],
-                    'end_station_name': event['end_station_name'],
-                    'end_station_id': event['end_station_id'],
-                    'start_lat': event['start_lat'],
-                    'start_lng': event['start_lng'],
-                    'end_lat': event['end_lat'],
-                    'end_lng': event['end_lng'],
-                    'member_casual': event['member_casual']
-                }
-                                    )
-            db.commit()
-
-    logger.info({
-        "status": "success",
-        "message": "Flagged event written to Snowflake successfully"
-    })
-    return {
-        "status": "success",
-        "message": "Flagged event written to Snowflake successfully"
-    }
-    
-    # except Exception as e:
-    #     try:
-    #         f_error = ast.literal_eval(str(e))
-    #     except SyntaxError as se:
-    #         f_error = str(e)
-    #     error_logger.error({
-    #         "status": "error",
-    #         "message": "An error occurred while writing flagged event to Snowflake",
-    #         "error": f_error
-    #     })
-    #     raise Exception({
-    #         "status": "error",
-    #         "message": "An error occurred while writing flagged event to Snowflake",
-    #         "error": f_error
-    #     })
-
-
-def process_stream(data_path: str, 
-                   snowflake_config: Dict,
-                   channel_id: str,
-                   oauth_token: str,
-                   slack_bot_name: str,
-                   delay_seconds: int = 2, 
-                   chunk_size: int = 10) -> Generator[Dict, None, None]:
-    """
-    Processes a real-time event stream by reading a CSV file line by line with a delay.
-
-    Args:
-        data_path (str): The path to the raw data CSV file.
-        snowflake_config (Dict): Configuration dictionary for Snowflake connection.
-        channel_id (str): Slack channel ID to send alerts to.
-        oauth_token (str): OAuth token for Slack authentication.
-        slack_bot_name (str): Name of the Slack bot sending alerts.
-        delay_seconds (int): The delay in seconds between yielding each line.
-        chunk_size (int): The number of lines to read at once.
-
-    Yields:
-        dict: A dictionary representing a single row from the CSV file.
-    """
     try:
-        if not isinstance(data_path, str):
-            raise InvalidArgumentTypeError("data_path argument must be a string")
+        if not isinstance(event, dict):
+            raise InvalidArgumentTypeError("event argument must be a dictionary")
         if not isinstance(snowflake_config, dict):
             raise InvalidArgumentTypeError("snowflake_config argument must be a dictionary")
-        if not isinstance(channel_id, str):
-            raise InvalidArgumentTypeError("channel_id argument must be a string")
-        if not isinstance(oauth_token, str):
-            raise InvalidArgumentTypeError("oauth_token argument must be a string")
-        if not isinstance(slack_bot_name, str):
-            raise InvalidArgumentTypeError("slack_bot_name argument must be a string")
-        if not isinstance(delay_seconds, int):
-            raise InvalidArgumentTypeError("delay_seconds argument must be an integer")
-        if not isinstance(chunk_size, int):
-            raise InvalidArgumentTypeError("chunk_size argument must be an integer")
+        
+        required_snowflake_config_keys = [
+            "snowflake_username",
+            "snowflake_password",
+            "snowflake_account",
+            "snowflake_database",
+            "snowflake_schema",
+            "snowflake_warehouse",
+            "snowflake_role"
+        ]
 
-        flagged_long_events_cnt = 0
-        flagged_midnight_events_cnt = 0
-        flagged_events_cnt = 0
-        for event in event_stream(data_path, delay_seconds, chunk_size):
-            start_time = pd.to_datetime(event['started_at'])
-            end_time = pd.to_datetime(event['ended_at'])
+        for key in required_snowflake_config_keys:
+            if key not in snowflake_config:
+                raise KeyError(f"missing required snowflake config key: {key}")
+        
+        required_event_keys = [
+            "id",
+            "ride_id",
+            "flag_type",
+            "rideable_type",
+            "started_at",
+            "ended_at",
+            "start_station_name",
+            "start_station_id",
+            "end_station_name",
+            "end_station_id",
+            "start_lat",
+            "start_lng",
+            "end_lat",
+            "end_lng",
+            "member_casual"
+        ]
 
-            duration_minutes = (end_time - start_time).total_seconds() / 60.0
-            event['duration_minutes'] = duration_minutes
-            rider_type = event['member_casual']
-            start_hour = start_time.hour
-            
-            #stream flagged events: trips greater than 45 minutes
-            if duration_minutes > 45:
-                event['flag_type'] = 'exceeded_45_minutes'
-                formatted_msg = f"""
-                ⚠️*Ride Alert!*
-            
-                *Ride ID:* {event['ride_id']}
-                *Member Type:* {event['member_casual']}
-                *Flag Type:* {event['flag_type']}
-                *Start Time:* {event['started_at']}
-                *End Time:* {event['ended_at']}
-                *Duration:* {event['duration_minutes']:.1f} mins
-                *Timestamp:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                """
-                ride_id = event['ride_id']
-                event['id'] = hashlib.sha256(ride_id.encode()).hexdigest()
-                send_alert_status = send_slack_alert(
-                    message=formatted_msg,
-                    channel=channel_id,
-                    oauth_token=oauth_token,
-                    slack_bot=slack_bot_name
-                )
-                if send_alert_status['status'] == 'error':
-                    error_logger.error({
-                        "status": "error",
-                        "message": "Failed to send alert for long trip event",
-                        "error": send_alert_status['error']
-                    })
-                    raise Exception(send_alert_status)
-                #write to snowflake
-                print("event example", event)
-                existing_ids = []
-                #read the file to check if event id already exists
-                if os.path.exists("flagged_event_ids.txt"):
-                    with open("flagged_event_ids.txt", "r") as f:
-                        existing_ids = f.read().splitlines()
-                
-                if event['id'] not in existing_ids:
-                    write_snowflake_status = write_flagged_event_to_snowflake(
-                        event=event,
-                        snowflake_config=snowflake_config
+        for key in required_event_keys:
+            if key not in event:
+                raise KeyError(f"missing required event key: {key}")
+
+
+        user = snowflake_config['snowflake_username']
+        password = snowflake_config['snowflake_password']
+        account = snowflake_config['snowflake_account']
+        database = snowflake_config['snowflake_database']
+        schema = snowflake_config['snowflake_schema']
+        warehouse = snowflake_config['snowflake_warehouse']
+        role = snowflake_config['snowflake_role']
+
+        conn_string = f"snowflake://{user}:{password}@{account}/{database}/{schema}?warehouse={warehouse}&role={role}"
+        alerts_schema = AlertsLog.__table_args__['schema']
+        table_name = AlertsLog.__tablename__
+
+        with create_session(conn_string) as db:
+
+                sql_query = text(f"""
+                    INSERT INTO {database}.{alerts_schema}.{table_name} (
+                        id,
+                        ride_id,
+                        flag_type,
+                        rideable_type,
+                        started_at,
+                        ended_at,
+                        start_station_name,
+                        start_station_id,
+                        end_station_name,
+                        end_station_id,
+                        start_lat,
+                        start_lng,
+                        end_lat,
+                        end_lng,
+                        member_casual,
+                        created_at,
+                        updated_at
                     )
-                    logger.info("written flagged event to snowflake")
-
-                
-                # if write_snowflake_status['status'] == 'error':
-                #     error_logger.error({
-                #         "status": "error",
-                #         "message": "Failed to write flagged event to Snowflake",
-                #         "error": write_snowflake_status['error']
-                #     })
-                #     raise Exception(write_snowflake_status)
-                
-                #write the ids to a file path
-                with open("flagged_event_ids.txt", "a") as f:
-                    f.write(f"{event['id']}\n")
-                flagged_long_events_cnt += 1
-            
-            #stream midnight rides for casual riders
-            if rider_type == 'casual' and (start_hour >= 0 and start_hour < 6):
-                event['flag_type'] = 'midnight_ride_casual'
-                formatted_msg = f"""
-                ⚠️*Ride Alert!*
-
-                *Ride ID:* {event['ride_id']}
-                *Member Type:* {event['member_casual']}
-                *Start Time:* {event['started_at']}
-                *End Time:* {event['ended_at']}
-                *Flag Type:* {event['flag_type']}
-                *Duration:* {event['duration_minutes']:.1f} mins
-                *Timestamp:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                """
-                send_alert_status = send_slack_alert(
-                    message=formatted_msg,
-                    channel=channel_id,
-                    oauth_token=oauth_token,
-                    slack_bot=slack_bot_name
-                )
-                if send_alert_status['status'] == 'error':
-                    error_logger.error({
-                        "status": "error",
-                        "message": "Failed to send alert for midnight casual ride event",
-                        "error": send_alert_status['error']
-                    })
-                    raise Exception(send_alert_status)
-                
-                ride_id = event['ride_id']
-                event['id'] = hashlib.sha256(ride_id.encode()).hexdigest()
-                existing_ids = []
-                #read the file to check if event id already exists
-                if os.path.exists("flagged_event_ids.txt"):
-                    with open("flagged_event_ids.txt", "r") as f:
-                        existing_ids = f.read().splitlines()
-                
-
-                if event['id'] not in existing_ids:
-                    #write to snowflake
-                    write_snowflake_status = write_flagged_event_to_snowflake(
-                        event=event,
-                        snowflake_config=snowflake_config
+                    VALUES (
+                        :id,
+                        :ride_id,
+                        :flag_type,
+                        :rideable_type,
+                        :started_at,
+                        :ended_at,
+                        :start_station_name,
+                        :start_station_id,
+                        :end_station_name,
+                        :end_station_id,
+                        :start_lat,
+                        :start_lng,
+                        :end_lat,
+                        :end_lng,
+                        :member_casual,
+                        CURRENT_TIMESTAMP()::timestamp_ntz,
+                        CURRENT_TIMESTAMP()::timestamp_ntz
                     )
-                    logger.info("written flagged event to snowflake")
+                        """
+                        )
+                            
+                execute_query = db.execute(sql_query,
+                    {
+                        'id': event['id'],
+                        'ride_id': event['ride_id'],
+                        'flag_type': event['flag_type'],
+                        'rideable_type': event['rideable_type'],
+                        'started_at': event['started_at'],
+                        'ended_at': event['ended_at'],
+                        'start_station_name': event['start_station_name'],
+                        'start_station_id': event['start_station_id'],
+                        'end_station_name': event['end_station_name'],
+                        'end_station_id': event['end_station_id'],
+                        'start_lat': event['start_lat'],
+                        'start_lng': event['start_lng'],
+                        'end_lat': event['end_lat'],
+                        'end_lng': event['end_lng'],
+                        'member_casual': event['member_casual']
+                    }
+                                        )
+                db.commit()
 
-                # if write_snowflake_status['status'] == 'error':
-                #     error_logger.error({
-                #         "status": "error",
-                #         "message": "Failed to write flagged event to Snowflake",
-                #         "error": write_snowflake_status['error']
-                #     })
-                #     raise Exception(write_snowflake_status)
-
-                #write the ids to a file path
-                with open("flagged_event_ids.txt", "a") as f:
-                    f.write(f"{event['id']}\n")
-                flagged_midnight_events_cnt += 1
-            
-            flagged_events_cnt = flagged_long_events_cnt + flagged_midnight_events_cnt
-                
         logger.info({
             "status": "success",
-            "message": "Long trip processed and flagged successfully",
-            "midnight_events_count": flagged_midnight_events_cnt,
-            "long_events_count": flagged_long_events_cnt,
-            "flagged_events_count": flagged_events_cnt
+            "message": "Flagged event written to Snowflake successfully"
         })
         return {
             "status": "success",
-            "message": "Long trip processed and flagged successfully",
-            "midnight_events_count": flagged_midnight_events_cnt,
-            "long_events_count": flagged_long_events_cnt,
-            "flagged_events_count": flagged_events_cnt
+            "message": "Flagged event written to Snowflake successfully"
         }
-
+        
     except Exception as e:
+        try:
+            f_error = ast.literal_eval(str(e))
+        except SyntaxError as se:
+            f_error = str(e)
         error_logger.error({
             "status": "error",
-            "message": "An error occurred while processing event stream from raw data",
-            "error": str(e)
+            "message": "An error occurred while writing flagged event to Snowflake",
+            "error": f_error
         })
         raise Exception({
             "status": "error",
-            "message": "An error occurred while processing event stream from raw data",
-            "error": str(e)
+            "message": "An error occurred while writing flagged event to Snowflake",
+            "error": f_error
         })
 
 
-# process_stream(RAW_DATA_PATH, 
-#                 snowflake_config=SNOWFLAKE_CONFIG,
-#                channel_id=SLACK_CHANNEL_ID,
-#                oauth_token=SLACK_BOT_OAUTH_TOKEN,
-#                slack_bot_name=SLACK_BOT_NAME,
-#                delay_seconds=2, 
-#                chunk_size=100
-#                )
-
-# test_alert = send_slack_alert(
-#     message="This is a test alert from Bikeshare Data Pipeline",
-#     channel=SLACK_CHANNEL_ID,
-#     oauth_token=SLACK_BOT_OAUTH_TOKEN,
-#     slack_bot=SLACK_BOT_NAME
-# )
 
 
