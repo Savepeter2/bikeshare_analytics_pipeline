@@ -195,7 +195,9 @@ class TestBikeRideModel:
             'start_lng',
             'end_lat',
             'end_lng',
-            'member_casual'
+            'member_casual',
+            'created_at',
+            'updated_at'
         }
         bike_ride_attributes = {attr.key for attr in BikeRide.__table__.columns}
         assert bike_ride_attributes == expected_attributes
