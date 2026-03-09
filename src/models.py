@@ -40,6 +40,35 @@ class BikeRide(Base):
     __tablename__ = 'raw_bike_rides'
     __table_args__ = {
         'schema': 'RAW', #will still change, has to be created at and updated at
+        'comment': 'Bike sharing raw trips in Snowflake after merging from staging table'
+    }
+
+    ride_id = Column(String(255), primary_key=True)
+    rideable_type = Column(String(255))
+    started_at = Column(TIMESTAMP_NTZ)
+    ended_at = Column(TIMESTAMP_NTZ)
+    start_station_name = Column(String(255))
+    start_station_id = Column(String(255))
+    end_station_name = Column(String(255))
+    end_station_id = Column(String(255))
+    start_lat = Column(Float)
+    start_lng = Column(Float)
+    end_lat = Column(Float)
+    end_lng = Column(Float)
+    member_casual = Column(String(255))
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def __repr__(self):
+        return f"<BikeRide(ride_id='{self.ride_id}', started_at='{self.started_at}')>"
+
+class StagingBikeRide(Base):
+    """
+    ORM model for the bike rides staging table in Snowflake.
+    """
+    __tablename__ = 'stg_bike_rides'
+    __table_args__ = {
+        'schema': 'RAW', #will still change, has to be created at and updated at
         'comment': 'Bike sharing ride data from transformed S3 bucket'
     }
 
