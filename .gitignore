@@ -177,6 +177,7 @@ pyrightconfig.json
 
 # local test files
 test_test.py
+test_test_test.py
 test_1.ipynb
 steps.txt
 secrets.ini
@@ -189,3 +190,4 @@ dbt_packages/
 logs/
 dbt_internal_packages/
 .user.yml
+.vscode/
