@@ -1,76 +1,76 @@
-name: Deploy to Kubernetes
+# name: Deploy to Kubernetes
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+# on:
+#   push:
+#     branches: [main]
+#   workflow_dispatch:
 
-env:
-  AWS_REGION: us-east-1
-  EKS_CLUSTER: bikeshare-cluster
-  ECR_REPOSITORY: bikeshare-airflow
-  NAMESPACE: airflow-prod
+# env:
+#   AWS_REGION: us-east-1
+#   EKS_CLUSTER: bikeshare-cluster
+#   ECR_REPOSITORY: bikeshare-airflow
+#   NAMESPACE: airflow-prod
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+# jobs:
+#   build-and-deploy:
+#     runs-on: ubuntu-latest
     
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+#     steps:
+#     - name: Checkout code
+#       uses: actions/checkout@v3
     
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+#     - name: Configure AWS credentials
+#       uses: aws-actions/configure-aws-credentials@v2
+#       with:
+#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#         aws-region: ${{ env.AWS_REGION }}
     
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+#     - name: Login to Amazon ECR
+#       id: login-ecr
+#       uses: aws-actions/amazon-ecr-login@v1
     
-    - name: Build, tag, and push image to ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-          $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+#     - name: Build, tag, and push image to ECR
+#       env:
+#         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#         IMAGE_TAG: ${{ github.sha }}
+#       run: |
+#         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+#         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+#         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+#           $ECR_REGISTRY/$ECR_REPOSITORY:latest
+#         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
     
-    - name: Update kubeconfig
-      run: |
-        aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+#     - name: Update kubeconfig
+#       run: |
+#         aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
     
-    - name: Install Helm
-      uses: azure/setup-helm@v3
+#     - name: Install Helm
+#       uses: azure/setup-helm@v3
     
-    - name: Deploy to Kubernetes via Helm
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        helm repo add apache-airflow https://airflow.apache.org
-        helm repo update
+#     - name: Deploy to Kubernetes via Helm
+#       env:
+#         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#         IMAGE_TAG: ${{ github.sha }}
+#       run: |
+#         helm repo add apache-airflow https://airflow.apache.org
+#         helm repo update
         
-        helm upgrade --install airflow apache-airflow/airflow \
-          --namespace $NAMESPACE \
-          --create-namespace \
-          --values kubernetes/airflow-values.yaml \
-          --set images.airflow.repository=$ECR_REGISTRY/$ECR_REPOSITORY \
-          --set images.airflow.tag=$IMAGE_TAG \
-          --wait \
-          --timeout 10m
+#         helm upgrade --install airflow apache-airflow/airflow \
+#           --namespace $NAMESPACE \
+#           --create-namespace \
+#           --values kubernetes/airflow-values.yaml \
+#           --set images.airflow.repository=$ECR_REGISTRY/$ECR_REPOSITORY \
+#           --set images.airflow.tag=$IMAGE_TAG \
+#           --wait \
+#           --timeout 10m
     
-    - name: Verify deployment
-      run: |
-        kubectl rollout status deployment/airflow-webserver -n $NAMESPACE
-        kubectl rollout status deployment/airflow-scheduler -n $NAMESPACE
+#     - name: Verify deployment
+#       run: |
+#         kubectl rollout status deployment/airflow-webserver -n $NAMESPACE
+#         kubectl rollout status deployment/airflow-scheduler -n $NAMESPACE
     
-    - name: Run smoke tests
-      run: |
-        kubectl get pods -n $NAMESPACE
-        # Add your smoke tests here
+#     - name: Run smoke tests
+#       run: |
+#         kubectl get pods -n $NAMESPACE
+#         # Add your smoke tests here
