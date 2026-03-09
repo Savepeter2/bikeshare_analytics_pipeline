@@ -191,3 +191,7 @@ logs/
 dbt_internal_packages/
 .user.yml
 .vscode/
+
+#ci-cd files
+cd.yml
+deploy-k8s.yml  
