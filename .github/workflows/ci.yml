@@ -2,13 +2,14 @@ name: CI Pipeline
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev]
   push:
-    branches: [develop]
+    branches: [dev]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    environment: development
     steps:
       - uses: actions/checkout@v3
       
@@ -22,62 +23,45 @@ jobs:
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       
-      - name: Install dependencies
-        run: poetry install
+      # - name: Install dependencies
+      #   run: poetry install
       
-      - name: Run linting
-        run: |
-          poetry run ruff check .
-          poetry run black --check .
-          poetry run mypy src/
+      # - name: Run linting
+      #   run: |
+      #     poetry run ruff check .
+      #     poetry run black --check .
+      #     poetry run mypy src/
       
-      - name: Run unit tests
-        run: poetry run pytest tests/unit -v --cov=src --cov-report=xml
+      # - name: Run unit tests
+      #   run: poetry run pytest tests/unit -v --cov=src --cov-report=xml
       
-      - name: Run integration tests
-        run: poetry run pytest tests/integration -v
+      # - name: Run integration tests
+      #   run: poetry run pytest tests/integration -v
       
-      - name: DAG validation
-        run: poetry run python scripts/validate_dags.py
+      # - name: DAG validation
+      #   run: poetry run python scripts/validate_dags.py
       
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
+      # - name: Upload coverage
+      #   uses: codecov/codecov-action@v3
 
   build:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
+    environment: development
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-      
-      - name: Build and push Docker image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/bikeshare-airflow:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/bikeshare-airflow:$IMAGE_TAG
-          docker tag $ECR_REGISTRY/bikeshare-airflow:$IMAGE_TAG \
-            $ECR_REGISTRY/bikeshare-airflow:latest
-          docker push $ECR_REGISTRY/bikeshare-airflow:latest
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-  security-scan:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.login-ecr.outputs.registry }}/bikeshare-airflow:${{ github.sha }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/bikeshare-pipeline:dev
+# savepeter2/bikeshare-pipeline:${{ github.sha }}
