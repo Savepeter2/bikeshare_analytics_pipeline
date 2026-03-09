@@ -10,7 +10,7 @@ COPY --chown=airflow:root pyproject.toml poetry.lock ./
 RUN poetry lock && poetry config virtualenvs.create false && \
     poetry install --no-root --no-interaction --no-ansi
 RUN pip install "apache-airflow-providers-celery @ git+https://github.com/apache/airflow.git@ff33e4f#subdirectory=providers/celery"
-# RUN pip install "dbt-core>=1.9.0"
+RUN pip install "dbt-core>=1.9.0"
 COPY --chown=airflow:root dbt_transform /opt/airflow/dbt_transform
 WORKDIR /opt/airflow/dbt_transform
 RUN rm -rf target dbt_packages && \
