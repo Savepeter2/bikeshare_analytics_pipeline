@@ -749,14 +749,14 @@ files = [
 
 [[package]]
 name = "click"
-version = "8.2.1"
+version = "8.3.1"
 description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "click-8.2.1-py3-none-any.whl", hash = "sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b"},
-    {file = "click-8.2.1.tar.gz", hash = "sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202"},
+    {file = "click-8.3.1-py3-none-any.whl", hash = "sha256:981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6"},
+    {file = "click-8.3.1.tar.gz", hash = "sha256:12ff4785d337a1bb490bb7e9c2b1ee5da3112e94a8622f26a6c77f5d2fc6842a"},
 ]
 
 [package.dependencies]
@@ -1192,88 +1192,91 @@ files = [
 
 [[package]]
 name = "dbt-adapters"
-version = "1.16.3"
+version = "1.22.8"
 description = "The set of adapter protocols and base functionality that supports integration with dbt-core"
 optional = false
-python-versions = ">=3.9.0"
+python-versions = ">=3.10.0"
 groups = ["main"]
 files = [
-    {file = "dbt_adapters-1.16.3-py3-none-any.whl", hash = "sha256:234af35140ce42753d093ff056d4cd40a7d2d80c062ed9030891494dff9a18b7"},
-    {file = "dbt_adapters-1.16.3.tar.gz", hash = "sha256:d49d3e57befaba36edf009e6fe001d95dd0c902e5aa6678df0812dcd905259ff"},
+    {file = "dbt_adapters-1.22.8-py3-none-any.whl", hash = "sha256:4962f5add2ff989e4d0275ebcb40bbd2c00c22b6c80a9bef8ce0ee9c284a893d"},
+    {file = "dbt_adapters-1.22.8.tar.gz", hash = "sha256:ee24fd42450f7518a9df350337769eae63626458f273f8d444b81944371f4976"},
 ]
 
 [package.dependencies]
 agate = ">=1.0,<2.0"
-dbt-common = ">=1.13,<2.0"
+dbt-common = ">=1.36,<2.0"
 dbt-protos = ">=1.0.291,<2.0"
 mashumaro = {version = ">=3.9,<3.15", extras = ["msgpack"]}
-protobuf = ">=5.0,<6.0"
+protobuf = ">=6.0,<7.0"
 pytz = ">=2015.7"
 typing-extensions = ">=4.0,<5.0"
 
 [[package]]
 name = "dbt-common"
-version = "1.27.1"
+version = "1.37.3"
 description = "The shared common utilities that dbt-core and adapter implementations use"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "dbt_common-1.27.1-py3-none-any.whl", hash = "sha256:9753e8f79d2d648c7716dd9e07dbbdd518ca3c3d101b6d2ee6e423ea9b6a20b5"},
-    {file = "dbt_common-1.27.1.tar.gz", hash = "sha256:1cc5b0579768a03800d90ecd9b5646c9648c970b8f278d85e1760c836007a4db"},
+    {file = "dbt_common-1.37.3-py3-none-any.whl", hash = "sha256:e11b81903107d9f254d0ec7ac14b2bcf6d531e46456cbc7881fdbfeb9bbd8eec"},
+    {file = "dbt_common-1.37.3.tar.gz", hash = "sha256:f99304cf93f549c09d302eb61d9b280748bbe24e2245e214189ea08b41196ec3"},
 ]
 
 [package.dependencies]
 agate = ">=1.7.0,<1.10"
 colorama = ">=0.3.9,<0.5"
-dbt-protos = ">=1.0.291,<2.0.0"
-deepdiff = ">=7.0,<8.0"
-isodate = ">=0.6,<0.7"
+dbt-protos = ">=1.0.410,<2.0.0"
+deepdiff = ">=7.0,<9.0"
+isodate = ">=0.6,<0.8"
 jinja2 = ">=3.1.3,<4"
 jsonschema = ">=4.0,<5.0"
 mashumaro = {version = ">=3.9,<4.0", extras = ["msgpack"]}
 pathspec = ">=0.9,<0.13"
-protobuf = ">=5.0,<6.0"
+protobuf = ">=6.0,<7.0"
 python-dateutil = ">=2.0,<3.0"
 requests = "<3.0.0"
 typing-extensions = ">=4.4,<5.0"
 
 [package.extras]
 build = ["check-wheel-contents", "twine", "wheel"]
-lint = ["black (>=23.3,<24.0)", "flake8", "flake8-docstrings", "flake8-pyproject", "mypy (>=1.3,<2.0)", "pytest (>=7.3,<8.0)", "types-jinja2 (>=2.11,<3.0)", "types-jsonschema (>=4.17,<5.0)", "types-protobuf (>=5.0,<6.0)", "types-python-dateutil (>=2.8,<3.0)", "types-pyyaml (>=6.0,<7.0)", "types-requests"]
+lint = ["black (>=23.3,<24.0)", "flake8", "flake8-docstrings", "flake8-pyproject", "mypy (>=1.3,<2.0)", "pytest (>=7.3,<8.0)", "types-jinja2 (>=2.11,<3.0)", "types-jsonschema (>=4.17,<5.0)", "types-protobuf (>=6.0,<7.0)", "types-python-dateutil (>=2.8,<3.0)", "types-pyyaml (>=6.0,<7.0)", "types-requests"]
 test = ["hypothesis (>=6.87,<7.0)", "pytest (>=7.3,<8.0)", "pytest-cov (>=4.1,<5.0)", "pytest-mock", "pytest-xdist (>=3.2,<4.0)"]
 
 [[package]]
 name = "dbt-core"
-version = "1.9.0"
+version = "1.11.7"
 description = "With dbt, data analysts and engineers can build analytics the way engineers build applications."
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "dbt_core-1.9.0-py3-none-any.whl", hash = "sha256:a4273c242f44d3fdded7a3d412e43e60959f96a659e7e7487d6ec02c9f6729d5"},
-    {file = "dbt_core-1.9.0.tar.gz", hash = "sha256:2b4c19f190abff4280837ea8bab4e3e1e70b9a846bed397df970b628dd6c51cc"},
+    {file = "dbt_core-1.11.7-py3-none-any.whl", hash = "sha256:047b4ac6bd4541dd33a6642dedd7fcd8b998e3f5ec6e7083436b369558a995d6"},
+    {file = "dbt_core-1.11.7.tar.gz", hash = "sha256:3bacae28f4c687280d91671a1694f52a1654e472bebc8313b37870ac3d61e42b"},
 ]
 
 [package.dependencies]
 agate = ">=1.7.0,<1.10"
-click = ">=8.0.2,<9.0"
+click = ">=8.3.0,<9.0"
 daff = ">=1.3.46"
-dbt-adapters = ">=1.10.1,<2.0"
-dbt-common = ">=1.13.0,<2.0"
+dbt-adapters = ">=1.15.5,<2.0"
+dbt-common = ">=1.37.3,<2.0"
 dbt-extractor = ">=0.5.0,<=0.6"
-dbt-semantic-interfaces = ">=0.7.4,<0.8"
-Jinja2 = ">=3.1.3,<4"
+dbt-protos = ">=1.0.405,<2.0"
+dbt-semantic-interfaces = ">=0.9.0,<0.10"
+jinja2 = ">=3.1.3,<4"
+jsonschema = ">=4.19.1,<5.0"
 mashumaro = {version = ">=3.9,<3.15", extras = ["msgpack"]}
 networkx = ">=2.3,<4.0"
 packaging = ">20.9"
 pathspec = ">=0.9,<0.13"
-protobuf = ">=5.0,<6.0"
+protobuf = ">=6.0,<7.0"
+pydantic = "<3"
 pytz = ">=2015.7"
 pyyaml = ">=6.0"
 requests = "<3.0.0"
 snowplow-tracker = ">=1.0.2,<2.0"
-sqlparse = ">=0.5.0,<0.6.0"
+sqlparse = ">=0.5.0,<0.5.5"
 typing-extensions = ">=4.4"
 
 [[package]]
@@ -1304,14 +1307,14 @@ files = [
 
 [[package]]
 name = "dbt-protos"
-version = "1.0.375"
+version = "1.0.431"
 description = "Public proto bindings for dbt"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "dbt_protos-1.0.375-py3-none-any.whl", hash = "sha256:3d54b660d9f918e3a16afe0d3beb2e8af910d63a85ade0f2466d06318999d778"},
-    {file = "dbt_protos-1.0.375.tar.gz", hash = "sha256:81289fc542dc719b62eb996fbfff208e623a9da26e32acdda668dd857fd61033"},
+    {file = "dbt_protos-1.0.431-py3-none-any.whl", hash = "sha256:5ee60f11f2cae5faaf0e5f8420f7872ab48ae978ccd74fdba60d0f3ab8fd1d26"},
+    {file = "dbt_protos-1.0.431.tar.gz", hash = "sha256:8fd3f52f2cb5532874eab93470fec3d9ace74e1ee342eaaf13b24867c042d0ce"},
 ]
 
 [package.dependencies]
@@ -1319,20 +1322,20 @@ protobuf = ">=3.17.1"
 
 [[package]]
 name = "dbt-semantic-interfaces"
-version = "0.7.5"
+version = "0.9.0"
 description = "The shared semantic layer definitions that dbt-core and MetricFlow use"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "dbt_semantic_interfaces-0.7.5-py3-none-any.whl", hash = "sha256:36315cfa6175da86904c86414948516bda3cf595bf9edd18e156437a2c5f6619"},
-    {file = "dbt_semantic_interfaces-0.7.5.tar.gz", hash = "sha256:8857f1833bffe5194f9d676ae2dc8cbcc45e8af4152187e351f68377708c39bb"},
+    {file = "dbt_semantic_interfaces-0.9.0-py3-none-any.whl", hash = "sha256:1b54c06ba89190a47a7f0563360930a0cce869e55b484ca09d261ade0e319155"},
+    {file = "dbt_semantic_interfaces-0.9.0.tar.gz", hash = "sha256:5c921257dce8bb51c9ffb5479f2bdd959e16ebfb98ee833de6daa70788c47271"},
 ]
 
 [package.dependencies]
 click = ">=7.0,<9.0"
 importlib-metadata = ">=6.0,<9"
-jinja2 = ">=3.1.3,<4"
+jinja2 = ">=3.1.6,<4"
 jsonschema = ">=4.0,<5"
 more-itertools = ">=8.0,<11.0"
 pydantic = ">=1.10,<3"
@@ -4068,23 +4071,22 @@ files = [
 
 [[package]]
 name = "protobuf"
-version = "5.29.6"
+version = "6.33.5"
 description = ""
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "protobuf-5.29.6-cp310-abi3-win32.whl", hash = "sha256:62e8a3114992c7c647bce37dcc93647575fc52d50e48de30c6fcb28a6a291eb1"},
-    {file = "protobuf-5.29.6-cp310-abi3-win_amd64.whl", hash = "sha256:7e6ad413275be172f67fdee0f43484b6de5a904cc1c3ea9804cb6fe2ff366eda"},
-    {file = "protobuf-5.29.6-cp38-abi3-macosx_10_9_universal2.whl", hash = "sha256:b5a169e664b4057183a34bdc424540e86eea47560f3c123a0d64de4e137f9269"},
-    {file = "protobuf-5.29.6-cp38-abi3-manylinux2014_aarch64.whl", hash = "sha256:a8866b2cff111f0f863c1b3b9e7572dc7eaea23a7fae27f6fc613304046483e6"},
-    {file = "protobuf-5.29.6-cp38-abi3-manylinux2014_x86_64.whl", hash = "sha256:e3387f44798ac1106af0233c04fb8abf543772ff241169946f698b3a9a3d3ab9"},
-    {file = "protobuf-5.29.6-cp38-cp38-win32.whl", hash = "sha256:36ade6ff88212e91aef4e687a971a11d7d24d6948a66751abc1b3238648f5d05"},
-    {file = "protobuf-5.29.6-cp38-cp38-win_amd64.whl", hash = "sha256:831e2da16b6cc9d8f1654c041dd594eda43391affd3c03a91bea7f7f6da106d6"},
-    {file = "protobuf-5.29.6-cp39-cp39-win32.whl", hash = "sha256:cb4c86de9cd8a7f3a256b9744220d87b847371c6b2f10bde87768918ef33ba49"},
-    {file = "protobuf-5.29.6-cp39-cp39-win_amd64.whl", hash = "sha256:76e07e6567f8baf827137e8d5b8204b6c7b6488bbbff1bf0a72b383f77999c18"},
-    {file = "protobuf-5.29.6-py3-none-any.whl", hash = "sha256:6b9edb641441b2da9fa8f428760fc136a49cf97a52076010cf22a2ff73438a86"},
-    {file = "protobuf-5.29.6.tar.gz", hash = "sha256:da9ee6a5424b6b30fd5e45c5ea663aef540ca95f9ad99d1e887e819cdf9b8723"},
+    {file = "protobuf-6.33.5-cp310-abi3-win32.whl", hash = "sha256:d71b040839446bac0f4d162e758bea99c8251161dae9d0983a3b88dee345153b"},
+    {file = "protobuf-6.33.5-cp310-abi3-win_amd64.whl", hash = "sha256:3093804752167bcab3998bec9f1048baae6e29505adaf1afd14a37bddede533c"},
+    {file = "protobuf-6.33.5-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:a5cb85982d95d906df1e2210e58f8e4f1e3cdc088e52c921a041f9c9a0386de5"},
+    {file = "protobuf-6.33.5-cp39-abi3-manylinux2014_aarch64.whl", hash = "sha256:9b71e0281f36f179d00cbcb119cb19dec4d14a81393e5ea220f64b286173e190"},
+    {file = "protobuf-6.33.5-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:8afa18e1d6d20af15b417e728e9f60f3aa108ee76f23c3b2c07a2c3b546d3afd"},
+    {file = "protobuf-6.33.5-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:cbf16ba3350fb7b889fca858fb215967792dc125b35c7976ca4818bee3521cf0"},
+    {file = "protobuf-6.33.5-cp39-cp39-win32.whl", hash = "sha256:a3157e62729aafb8df6da2c03aa5c0937c7266c626ce11a278b6eb7963c4e37c"},
+    {file = "protobuf-6.33.5-cp39-cp39-win_amd64.whl", hash = "sha256:8f04fa32763dcdb4973d537d6b54e615cc61108c7cb38fe59310c3192d29510a"},
+    {file = "protobuf-6.33.5-py3-none-any.whl", hash = "sha256:69915a973dd0f60f31a08b8318b73eab2bd6a392c79184b3612226b0a3f8ec02"},
+    {file = "protobuf-6.33.5.tar.gz", hash = "sha256:6ddcac2a081f8b7b9642c09406bc6a4290128fce5f471cddd165960bb9119e5c"},
 ]
 
 [[package]]
@@ -6251,4 +6253,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "af49557be1e449472f8e575b6ad6f519463eb2ad9224057343674426b44b4219"
+content-hash = "0df44065964b9b3c3c7fb9eb0f3d96095ad27541d74745543236ad31832de86c"
