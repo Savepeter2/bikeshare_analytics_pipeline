@@ -35,6 +35,7 @@ from src.schema import raw_data_schema
 from configs.config import RAW_DATA_PATH
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from time import sleep
 
 
 class InvalidArgumentTypeError(ValueError):
@@ -719,6 +720,7 @@ def standardize_coordinates_and_fill_station_ids(record: Dict,
                         merged_modified_record = store_modified_record[cnt_loop] | store_modified_record[cnt_loop - 1]
                         final_modified_record.append(merged_modified_record)
                     cnt_loop += 1
+            
 
         if final_modified_record:
             all_cleaned_records_per_batch.append(final_modified_record[0])
@@ -826,7 +828,7 @@ def impute_missing_station_ids(df: DataFrame,
                     batch_records.append(cleaned_record[0])
                 else:
                     raise Exception(transform_status)
-            
+                time.sleep(2) # add delay between batches to respect API rate limits
             batch_count += 1              
             # logger.info({
             #     "status": "success",
