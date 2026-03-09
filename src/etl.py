@@ -23,7 +23,7 @@ from botocore.exceptions import ClientError
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from src.models import BikeRide
+from src.models import BikeRide, StagingBikeRide
 from typing import List, Dict, Tuple, Set
 from sqlalchemy import text
 import numpy as np
@@ -300,9 +300,9 @@ class LoadToRawS3:
                 raise InvalidArgumentTypeError("partition_week must be a string")
             
             metadata_key = f"{self.raw_bucket_metadata_prefix}/year={partition_year}/week={partition_week}/ride_ids.parquet"
-            print("metadata_key", metadata_key)
+
             response = self.s3_client.get_object(Bucket=self.raw_bucket, Key=metadata_key)
-            print("response", response)
+
             parquet_data = response['Body'].read()  
             parquet_buffer = io.BytesIO(parquet_data)
             df = pd.read_parquet(parquet_buffer)
@@ -373,12 +373,7 @@ class LoadToRawS3:
             if not isinstance(new_ride_ids, set):
                 raise InvalidArgumentTypeError("new_ride_ids must be a set")
             
-            get_existing_ids = self.get_ride_ids_from_metadata(partition_year, partition_week)
-            
-            existing_ids = get_existing_ids['ride_ids']
-            all_ids = existing_ids.union(new_ride_ids)
-            all_ids = list(all_ids)
-            df = pd.DataFrame({"id": all_ids})
+            df = pd.DataFrame({"id": list(new_ride_ids)})
             parquet_buffer = io.BytesIO()
             df.to_parquet(parquet_buffer, index=False, engine='pyarrow')
             parquet_data = parquet_buffer.getvalue()
@@ -395,13 +390,13 @@ class LoadToRawS3:
             logger.info({
                 "status": "success",
                 "message": f"successfully updated ride IDs metadata for partition_year: {partition_year}, partition_week: {partition_week}",
-                "updated_ids_count": len(all_ids)
+                "updated_ids_count": len(new_ride_ids)
             })
 
             return {
                 "status": "success",
                 "message": f"successfully updated ride IDs metadata for partition_year: {partition_year}, partition_week: {partition_week}",
-                "updated_ids_count": len(all_ids)
+                "updated_ids_count": len(new_ride_ids)
             }
     
         except Exception as e:
@@ -420,112 +415,112 @@ class LoadToRawS3:
                 "error": f_error
             })
     
-    def filter_duplicate_rides(
-            self, 
-            rides_df: pd.DataFrame,
-            batch_year: str,
-            batch_week: str
-    ) -> Dict:
-        """
-        Filters out duplicate rides based on existing ride IDs in metadata.
+    # def filter_duplicate_rides(
+    #         self, 
+    #         rides_df: pd.DataFrame,
+    #         batch_year: str,
+    #         batch_week: str
+    # ) -> Dict:
+    #     """
+    #     Filters out duplicate rides based on existing ride IDs in metadata.
         
-        Args:
-            rides_df: DataFrame containing the rides to be filtered
-        Returns:
-            Dict: Status, message, and filtered DataFrame
-        """
-        try:
-            if not isinstance(rides_df, pd.DataFrame):
-                raise InvalidArgumentTypeError("rides_df must be a pandas DataFrame")
+    #     Args:
+    #         rides_df: DataFrame containing the rides to be filtered
+    #     Returns:
+    #         Dict: Status, message, and filtered DataFrame
+    #     """
+    #     try:
+    #         if not isinstance(rides_df, pd.DataFrame):
+    #             raise InvalidArgumentTypeError("rides_df must be a pandas DataFrame")
             
-            if not isinstance(batch_year, str):
-                raise InvalidArgumentTypeError("batch_year must be a string")
+    #         if not isinstance(batch_year, str):
+    #             raise InvalidArgumentTypeError("batch_year must be a string")
             
-            if not isinstance(batch_week, str):
-                raise InvalidArgumentTypeError("batch_week must be a string")
+    #         if not isinstance(batch_week, str):
+    #             raise InvalidArgumentTypeError("batch_week must be a string")
 
-            if not rides_df.empty:
-                new_data_list = []
-                existing_ids_list = []
+    #         if not rides_df.empty:
+    #             new_data_list = []
+    #             existing_ids_list = []
 
-                get_existing_ids = self.get_ride_ids_from_metadata(batch_year, batch_week)
-                print("get_existing_ids", get_existing_ids)
+    #             get_existing_ids = self.get_ride_ids_from_metadata(batch_year, batch_week)
+    #             print("get_existing_ids", get_existing_ids)
 
-                # if get_existing_ids['status'] == 'error':
-                #     logger.error({
-                #         "status": "error",
-                #         "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
-                #         "error": get_existing_ids
-                #     })
-                #     return {
-                #         "status": "error",
-                #         "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
-                #         "error": get_existing_ids
-                #     }
+    #             # if get_existing_ids['status'] == 'error':
+    #             #     logger.error({
+    #             #         "status": "error",
+    #             #         "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
+    #             #         "error": get_existing_ids
+    #             #     })
+    #             #     return {
+    #             #         "status": "error",
+    #             #         "message": f"Failed to retrieve existing ride IDs for {batch_year}, {batch_week}",
+    #             #         "error": get_existing_ids
+    #             #     }
                 
-                existing_ids = get_existing_ids['ride_ids']
+    #             existing_ids = get_existing_ids['ride_ids']
 
-                rides_df['ride_id'] = rides_df['ride_id'].astype(str)
-                new_rides = rides_df[~rides_df['ride_id'].isin(existing_ids)]
+    #             rides_df['ride_id'] = rides_df['ride_id'].astype(str)
+    #             new_rides = rides_df[~rides_df['ride_id'].isin(existing_ids)]
                 
-                if not new_rides.empty:
-                    new_data_list.append(new_rides)
+    #             if not new_rides.empty:
+    #                 new_data_list.append(new_rides)
             
-                if new_data_list:
-                    filtered_df = pd.concat(new_data_list, ignore_index=True)
+    #             if new_data_list:
+    #                 filtered_df = pd.concat(new_data_list, ignore_index=True)
                     
-                    logger.info({
-                        "status": "success",
-                        "message": f"Filtered {len(filtered_df)} new rides from {len(rides_df)} total rides",
-                        "filtered_rides_shape": filtered_df.shape
-                    })
-                    return {
-                        "status": "success",
-                        "message": f"Filtered {len(filtered_df)} new rides from {len(rides_df)} total rides",
-                        "filtered_rides": filtered_df,
-                        "existing_ride_ids": list(set().union(*existing_ids_list))
-                    }
+    #                 logger.info({
+    #                     "status": "success",
+    #                     "message": f"Filtered {len(filtered_df)} new rides from {len(rides_df)} total rides",
+    #                     "filtered_rides_shape": filtered_df.shape
+    #                 })
+    #                 return {
+    #                     "status": "success",
+    #                     "message": f"Filtered {len(filtered_df)} new rides from {len(rides_df)} total rides",
+    #                     "filtered_rides": filtered_df,
+    #                     "existing_ride_ids": list(set().union(*existing_ids_list))
+    #                 }
                 
-                else:
-                    result_df = pd.DataFrame(columns=rides_df.columns)
+    #             else:
+    #                 result_df = pd.DataFrame(columns=rides_df.columns)
 
-                    logger.info({
-                        "status": "success",
-                        "message": "No new rides found, all rides are duplicates"
-                    })
-                    return {
-                        "status": "success",
-                        "message": "No new rides found, all rides are duplicates",
-                        "filtered_rides": result_df
-                    }
-            else:
-                logger.info({
-                    "status": "success",
-                    "message": "Input rides_df dataframe is empty, hence deduplication will be skipped in the raw bucket",
-                    "input_shape": rides_df.shape
-                })
-                return {
-                    "status": "success",
-                    "message": "Input rides_df dataframe is empty, hence deduplication will be skipped in the raw bucket",
-                    "input_shape": rides_df.shape,
-                    "filtered_rides": rides_df
-                }
+    #                 logger.info({
+    #                     "status": "success",
+    #                     "message": "No new rides found, all rides are duplicates"
+    #                 })
+    #                 return {
+    #                     "status": "success",
+    #                     "message": "No new rides found, all rides are duplicates",
+    #                     "filtered_rides": result_df
+    #                 }
+    #         else:
+    #             logger.info({
+    #                 "status": "success",
+    #                 "message": "Input rides_df dataframe is empty, hence deduplication will be skipped in the raw bucket",
+    #                 "input_shape": rides_df.shape
+    #             })
+    #             return {
+    #                 "status": "success",
+    #                 "message": "Input rides_df dataframe is empty, hence deduplication will be skipped in the raw bucket",
+    #                 "input_shape": rides_df.shape,
+    #                 "filtered_rides": rides_df
+    #             }
             
-        except Exception as e:
-            try:
-                f_error = ast.literal_eval(str(e))
-            except SyntaxError as se:
-                f_error = str(e)
-            logger.error({
-                "status": "error",
-                "message": f"An error occurred while filtering duplicate rides for batch year: {batch_year}, batch week: {batch_week}",
-                "error": f_error
-            })
-            raise Exception({
-                "status": "error",
-                "message": f"An error occurred while filtering duplicate rides for batch year: {batch_year}, batch week: {batch_week}",
-                "error": f_error
-            })
+    #     except Exception as e:
+    #         try:
+    #             f_error = ast.literal_eval(str(e))
+    #         except SyntaxError as se:
+    #             f_error = str(e)
+    #         logger.error({
+    #             "status": "error",
+    #             "message": f"An error occurred while filtering duplicate rides for batch year: {batch_year}, batch week: {batch_week}",
+    #             "error": f_error
+    #         })
+    #         raise Exception({
+    #             "status": "error",
+    #             "message": f"An error occurred while filtering duplicate rides for batch year: {batch_year}, batch week: {batch_week}",
+    #             "error": f_error
+    #         })
     
     def upload_to_raw_bucket(
             self,
@@ -641,27 +636,28 @@ class LoadToRawS3:
             
             extracted_raw_data = response['Body']
             extracted_raw_df = pd.read_csv(extracted_raw_data)
+            extracted_ride_ids = set(extracted_raw_df['ride_id'].to_list())
+           
+            # filter_status = self.filter_duplicate_rides(extracted_raw_df,
+            #                                             batch_year,
+            #                                         batch_week)
+            # # print("filter_status", filter_status)
 
-            filter_status = self.filter_duplicate_rides(extracted_raw_df,
-                                                        batch_year,
-                                                    batch_week)
-            # print("filter_status", filter_status)
-
-            if filter_status['status'] == 'error':
-                logger.error({
-                    "status": "error",
-                    "message": "Failed to filter duplicate raw trips from raw bucket",
-                    "error": filter_status
-                })
-                return {
-                    "status": "error",
-                    "error": filter_status
-                }
+            # if filter_status['status'] == 'error':
+            #     logger.error({
+            #         "status": "error",
+            #         "message": "Failed to filter duplicate raw trips from raw bucket",
+            #         "error": filter_status
+            #     })
+            #     return {
+            #         "status": "error",
+            #         "error": filter_status
+            #     }
             
-            filtered_raw_trips_df = filter_status['filtered_rides']
-            extracted_ride_ids = set(filtered_raw_trips_df['ride_id'].astype(str).tolist())
+            # filtered_raw_trips_df = filter_status['filtered_rides']
+            # extracted_ride_ids = set(filtered_raw_trips_df['ride_id'].astype(str).tolist())
 
-            if filtered_raw_trips_df.empty:
+            if extracted_raw_df.empty:
                 logger.info({
                     "status": "info",
                     "message": f"No new rides to upload for year: {batch_year}, week: {batch_week}. All rides are duplicates or empty."
@@ -673,10 +669,10 @@ class LoadToRawS3:
                 }
                 
             upload_status = self.upload_to_raw_bucket(
-                filtered_raw_trips_df,
+                extracted_raw_df,
                 batch_year,
                 batch_week
-            )
+            ) 
 
             if upload_status['status'] == 'error':
                 logger.error({
@@ -696,8 +692,6 @@ class LoadToRawS3:
                 batch_week,
                 extracted_ride_ids
             )     
-
-            print("update_ride_ids_status", update_ride_ids_status)  
             
             if update_ride_ids_status['status'] == 'error':
                 logger.error({
@@ -715,14 +709,14 @@ class LoadToRawS3:
                 "status": "success",
                 "message": f"Successfully loaded raw data to raw bucket for year: {batch_year}, week: {batch_week}",
                 "uploaded_records": upload_status['uploaded_records'],
-                "updated_ride_ids_count": update_ride_ids_status['updated_ids_count']
+                # "updated_ride_ids_count": update_ride_ids_status['updated_ids_count']
             })
 
             return {
                 "status": "success",
                 "message": f"Successfully loaded raw data to raw bucket for batch year: {batch_year}, week: {batch_week}",
                 "uploaded_records": upload_status['uploaded_records'],
-                "updated_ride_ids_count": update_ride_ids_status['updated_ids_count']
+                # "updated_ride_ids_count": update_ride_ids_status['updated_ids_count']
             }
         except Exception as e:
             try:
@@ -805,7 +799,7 @@ class LoadToTransformedS3:
             self.transformed_bucket = s3_config['transformed_bucket']
             self.raw_bucket = s3_config['raw_bucket']
             self.raw_s3_key = s3_config['raw_s3_key']
-            self.duplicate_tracker_prefix = f"{self.transformed_bucket_metadata_prefix}/metadata/processed_bikeshare"
+            self.duplicate_tracker_prefix = f"{self.transformed_bucket_metadata_prefix}/processed_bikeshare"
 
         except Exception as e:
             try:
@@ -882,8 +876,9 @@ class LoadToTransformedS3:
             if not isinstance(batch_id, str):
                 raise InvalidArgumentTypeError("batch_id must be a string")
             
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"{batch_id}_{timestamp}.parquet"
+            # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # file_name = f"{batch_id}_{timestamp}.parquet"
+            file_name = f"{batch_id}.parquet"
             return file_name
         
         except Exception as e:
@@ -920,7 +915,7 @@ class LoadToTransformedS3:
             
             metadata_key = f"{self.duplicate_tracker_prefix}/{partition_year}/processed_ids.parquet"
             response = self.s3_client.get_object(Bucket=self.transformed_bucket, Key=metadata_key)
-            print("response", response)
+ 
             parquet_data = response['Body'].read()  
             parquet_buffer = io.BytesIO(parquet_data)
             df = pd.read_parquet(parquet_buffer)
@@ -1036,119 +1031,119 @@ class LoadToTransformedS3:
             })
 
     
-    def filter_duplicate_rides(self, rides_df: pd.DataFrame) -> Dict:
-        """
-        Filter out duplicate rides based on existing data in S3 partitions
-        Args:
-            rides_df: DataFrame with rides data
-        Returns:
+    # def filter_duplicate_rides(self, rides_df: pd.DataFrame) -> Dict:
+    #     """
+    #     Filter out duplicate rides based on existing data in S3 partitions
+    #     Args:
+    #         rides_df: DataFrame with rides data
+    #     Returns:
 
-        """
-        try:
-            if not isinstance(rides_df, pd.DataFrame):
-                raise InvalidArgumentTypeError("rides_df must be a pandas DataFrame")
+    #     """
+    #     try:
+    #         if not isinstance(rides_df, pd.DataFrame):
+    #             raise InvalidArgumentTypeError("rides_df must be a pandas DataFrame")
 
-            if not rides_df.empty:
-                rides_df['start_datetime'] = pd.to_datetime(
-                    rides_df['started_at'], 
-                    format='%Y-%m-%d %H:%M:%S', 
-                    errors='raise' 
-                )
+    #         if not rides_df.empty:
+    #             rides_df['start_datetime'] = pd.to_datetime(
+    #                 rides_df['started_at'], 
+    #                 format='%Y-%m-%d %H:%M:%S', 
+    #                 errors='raise' 
+    #             )
 
-                rides_df['partition_year'] = rides_df['start_datetime'].dt.strftime('%Y')
+    #             rides_df['partition_year'] = rides_df['start_datetime'].dt.strftime('%Y')
 
-                new_data_list = []
-                existing_ids_list = []
+    #             new_data_list = []
+    #             existing_ids_list = []
 
-                for partition_year, group in rides_df.groupby('partition_year'):
-                    get_existing_ids = self.get_processed_ride_ids_from_metadata(partition_year)
-                    print("get_existing_ids", get_existing_ids)
+    #             for partition_year, group in rides_df.groupby('partition_year'):
+    #                 get_existing_ids = self.get_processed_ride_ids_from_metadata(partition_year)
+    #                 print("get_existing_ids", get_existing_ids)
 
-                    if get_existing_ids['status'] == 'error':
-                        logger.error({
-                            "status": "error",
-                            "message": f"Failed to retrieve existing ride IDs for {partition_year}",
-                            "error": get_existing_ids
-                        })
-                        raise Exception({
-                            "status": "error",
-                            "message": f"Failed to retrieve existing ride IDs for {partition_year}",
-                            "error": get_existing_ids
-                        })
+    #                 if get_existing_ids['status'] == 'error':
+    #                     logger.error({
+    #                         "status": "error",
+    #                         "message": f"Failed to retrieve existing ride IDs for {partition_year}",
+    #                         "error": get_existing_ids
+    #                     })
+    #                     raise Exception({
+    #                         "status": "error",
+    #                         "message": f"Failed to retrieve existing ride IDs for {partition_year}",
+    #                         "error": get_existing_ids
+    #                     })
                     
                     
-                    existing_ids = get_existing_ids['processed_ids']
-                    existing_ids_list.append(existing_ids)
+    #                 existing_ids = get_existing_ids['processed_ids']
+    #                 existing_ids_list.append(existing_ids)
 
                 
 
-                    group['ride_id'] = group['ride_id'].astype(str)
-                    new_rides = group[~group['ride_id'].isin(existing_ids)]
+    #                 group['ride_id'] = group['ride_id'].astype(str)
+    #                 new_rides = group[~group['ride_id'].isin(existing_ids)]
 
-                    if not new_rides.empty:
-                        new_data_list.append(new_rides)
+    #                 if not new_rides.empty:
+    #                     new_data_list.append(new_rides)
                 
-                if new_data_list:
+    #             if new_data_list:
                     
-                    result_df = pd.concat(new_data_list, ignore_index=True)
+    #                 result_df = pd.concat(new_data_list, ignore_index=True)
                     
-                    logger.info({
-                        "status": "success",
-                        "message": f"Filtered {len(result_df)} new rides from {len(rides_df)} total rides",
-                        "filtered_rides_shape": result_df.shape
-                    })
-                    return {
-                        "status": "success",
-                        "message": f"Filtered {len(result_df)} new rides from {len(rides_df)} total rides",
-                        "filtered_rides": result_df,
-                        "existing_ids":  [elem for item in existing_ids_list for elem in (item if isinstance(item, set) else [item])]
-                    }
+    #                 logger.info({
+    #                     "status": "success",
+    #                     "message": f"Filtered {len(result_df)} new rides from {len(rides_df)} total rides",
+    #                     "filtered_rides_shape": result_df.shape
+    #                 })
+    #                 return {
+    #                     "status": "success",
+    #                     "message": f"Filtered {len(result_df)} new rides from {len(rides_df)} total rides",
+    #                     "filtered_rides": result_df,
+    #                     "existing_ids":  [elem for item in existing_ids_list for elem in (item if isinstance(item, set) else [item])]
+    #                 }
                 
-                else:
+    #             else:
 
-                    result_df = pd.DataFrame(columns=rides_df.columns)
+    #                 result_df = pd.DataFrame(columns=rides_df.columns)
 
-                    logger.info({
-                        "status": "success",
-                        "message": "No new rides found, all rides are duplicates",
-                        "filtered_rides": result_df,
-                    })
+    #                 logger.info({
+    #                     "status": "success",
+    #                     "message": "No new rides found, all rides are duplicates",
+    #                     "filtered_rides": result_df,
+    #                 })
 
-                    return {
-                        "status": "success",
-                        "message": "No new rides found, all rides are duplicates",
-                        "filtered_rides": result_df
-                    }
-            else:
-                logger.info({
-                    "status": "success",
-                    "message": "Input rides data is empty, hence deduplication will be skipped in the transformed bucket",
-                    "input_shape": rides_df.shape
+    #                 return {
+    #                     "status": "success",
+    #                     "message": "No new rides found, all rides are duplicates",
+    #                     "filtered_rides": result_df
+    #                 }
+    #         else:
+    #             logger.info({
+    #                 "status": "success",
+    #                 "message": "Input rides data is empty, hence deduplication will be skipped in the transformed bucket",
+    #                 "input_shape": rides_df.shape
 
-                })
-                return {
-                    "status": "success",
-                    "message": "Input rides data is empty, hence deduplication will be skipped in the transformed bucket",
-                    "filtered_rides": rides_df
-                } 
+    #             })
+    #             return {
+    #                 "status": "success",
+    #                 "message": "Input rides data is empty, hence deduplication will be skipped in the transformed bucket",
+    #                 "filtered_rides": rides_df
+    #             } 
         
-        except Exception as e:
-            try:
-                formatted_error = ast.literal_eval(str(e))
-            except SyntaxError as se:
-                formatted_error = str(e)
-            error_logger.error({
-                "status": "error",
-                "message": "An error occured while filtering duplicate rides data",
-                "error": formatted_error
-            })
-            raise Exception(
-                {
-                    "status": "error", 
-                    "message": "An error occurred while filtering duplicate rides data",
-                    "error": formatted_error
-                }
-            )
+    #     except Exception as e:
+    #         try:
+    #             formatted_error = ast.literal_eval(str(e))
+    #         except SyntaxError as se:
+    #             formatted_error = str(e)
+    #         error_logger.error({
+    #             "status": "error",
+    #             "message": "An error occured while filtering duplicate rides data",
+    #             "error": formatted_error
+    #         })
+    #         raise Exception(
+    #             {
+    #                 "status": "error", 
+    #                 "message": "An error occurred while filtering duplicate rides data",
+    #                 "error": formatted_error
+    #             }
+    #         )
 
     def upload_partitioned_data(self, 
                                new_rides_df: pd.DataFrame,
@@ -1219,7 +1214,6 @@ class LoadToTransformedS3:
             new_rides_df['ended_at'] = new_rides_df['ended_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
             new_rides_df['partition_key'] = new_rides_df[partition_column1] + "_" + new_rides_df['year_week']
 
-            print("new_rides_df", new_rides_df)
             no_records = 0
             for partition_key, group in new_rides_df.groupby('partition_key'):
                 user_type, year_week = partition_key.split('_')
@@ -1309,8 +1303,6 @@ class LoadToTransformedS3:
             if not isinstance(raw_data_schema, dict):
                 raise InvalidArgumentTypeError("raw_data_schema must be a dictionary")
             
-            #this needs to be changed to extracting from the raw bucket
-
             extract_raw_data_dump = self.s3_client.get_object(
                 Bucket=self.raw_bucket,
                 Key=extracted_dump_s3_key
@@ -1342,8 +1334,6 @@ class LoadToTransformedS3:
             
             cleaned_data = clean_data_status["data"]
 
-            print("cleaned_data head", cleaned_data.to_dict(orient='records')[:5])
-
             process_station_data_status = impute_missing_station_ids(cleaned_data, batch_size=100)
             if process_station_data_status['status'] != 'success':
                 raise Exception({
@@ -1352,9 +1342,7 @@ class LoadToTransformedS3:
                     "error": process_station_data_status['error']
                 })
             processed_data = process_station_data_status['data']
-            print("processed_data head", processed_data.to_dict(orient='records')[:5])
             date_time_now = date_time_now or datetime.now()
-            #save this processed data to a parquet format in S3
             s3_key = f"processed_data/processed_bikeshare_{date_time_now.strftime('%Y%m%d_%H%M%S')}.parquet"
             parquet_buffer = io.BytesIO()
             processed_data.to_parquet(parquet_buffer, index=False, engine='pyarrow')
@@ -1410,32 +1398,20 @@ class LoadToTransformedS3:
                 raise InvalidArgumentTypeError("processed data key must be a string type")
 
             processed_data_obj = self.s3_client.get_object(Bucket=self.s3_config['transformed_bucket'], Key=processed_data_key)
-            # print("processed_data_obj", processed_data_obj)
 
             processed_df = pd.read_parquet(io.BytesIO(processed_data_obj['Body'].read()))
 
-            # print("processed_df head", processed_df)
+            processed_df['start_datetime'] = pd.to_datetime(
+                    processed_df['started_at'], 
+                    format='%Y-%m-%d %H:%M:%S', 
+                    errors='raise' 
+                )
+
+            processed_df['partition_year'] = processed_df['start_datetime'].dt.strftime('%Y')
 
             start_time = datetime.now()
 
-            # print("starting to load staging data to s3, start_time: ", start_time)
-            
-            filter_rides = self.filter_duplicate_rides(processed_df)      
-                   
-            if filter_rides['status'] == 'error':
-                logger.error({
-                    "status": "error",
-                    "message": f"Failed to filter duplicate rides: {filter_rides['message']}"
-                })
-                raise Exception({"status": "error",
-                                "error": filter_rides
-                })
-            
-            new_rides_df = filter_rides['filtered_rides']
-
-            # print("new_rides_df shape after filtering duplicates: ", new_rides_df.head())
-
-            if new_rides_df.empty:
+            if processed_df.empty:
                 logger.info({
                     "status": "info",
                     "message": "No new rides to upload after filtering duplicates"
@@ -1447,10 +1423,7 @@ class LoadToTransformedS3:
                     "no_partitions": 0
                 }
             
-
-            upload_data_to_s3 = self.upload_partitioned_data(new_rides_df)
-
-            print("upload_data_to_s3", upload_data_to_s3)
+            upload_data_to_s3 = self.upload_partitioned_data(processed_df)
             
             if upload_data_to_s3['status'] == 'error':
                 logger.error({
@@ -1463,9 +1436,7 @@ class LoadToTransformedS3:
             uploaded_records = upload_data_to_s3['uploaded_records']
             no_partitions = upload_data_to_s3['no_partitions']
     
-            # print("finished loading to staging bucket, time taken: ", datetime.now() -  start_time)
-            
-            for partition_year, group in new_rides_df.groupby('partition_year'):
+            for partition_year, group in processed_df.groupby('partition_year'):
                 ride_ids = set(group['ride_id'].astype(str))
                 self.update_processed_ride_ids_metadata(partition_year, ride_ids)
 
@@ -1490,13 +1461,13 @@ class LoadToTransformedS3:
 
             error_logger.error({
                 "status": "error",
-                "message": "An error occurred while trying to deduplicate and load processed data to the transformed bucket",
+                "message": "An error occurred while trying to load processed data to the transformed bucket",
                 "error": formatted_error
             })
 
             raise Exception({
                 "status": "error",
-                "message": "An error occurred while trying to deduplicate and load processed data to the transformed bucket",
+                "message": "An error occurred while trying to load processed data to the transformed bucket",
                 "error": formatted_error
             })
 
@@ -1513,12 +1484,16 @@ class LoadTransformedDataToSnowflake:
     """
     def __init__(self, 
                 snowflake_config: Dict,
+                batch_year: str,
+                batch_week: str
                 ):
         """
         Initialize connection to Snowflake and S3
 
         Args:
             snowflake_config (Dict): Dictionary containing Snowflake connection details
+            batch_year (str): The year for the batch to process
+            batch_week (str): The week for the batch to process
 
         Returns:
             None
@@ -1546,6 +1521,11 @@ class LoadTransformedDataToSnowflake:
             
             if not all(isinstance(value, str) for value in snowflake_config.values()):
                 raise InvalidArgumentTypeError("All values in snowflake_config must be strings")
+            
+            if not isinstance(batch_year, str):
+                raise InvalidArgumentTypeError("batch_year must be a string")
+            if not isinstance(batch_week, str):
+                raise InvalidArgumentTypeError("batch_week must be a string")
 
             account = snowflake_config['snowflake_account']
             user = snowflake_config['snowflake_username']
@@ -1564,7 +1544,8 @@ class LoadTransformedDataToSnowflake:
             self.schema = schema
             self.role = role
             self.stage_name = stage_name
-
+            self.batch_year = batch_year
+            self.batch_week = batch_week
 
             self.connection_string = (
                     f"snowflake://{self.user}:{self.password}@{self.account}/{self.database}/{self.schema}?warehouse={self.warehouse}&role={self.role}"
@@ -1593,7 +1574,7 @@ class LoadTransformedDataToSnowflake:
             })
 
     
-    def load_from_stage_to_table(
+    def copy_to_staging_table(
             self,
     ) -> Dict:
         """
@@ -1608,9 +1589,15 @@ class LoadTransformedDataToSnowflake:
         try:
         
             with create_session(self.connection_string) as db:
+                delete_query = text(f"""
+                DELETE FROM {self.database}.{StagingBikeRide.__table_args__['schema']}.{StagingBikeRide.__tablename__}
+                WHERE  WEEK(started_at) = '{self.batch_week}' AND YEAR(started_at) = '{self.batch_year}'
+            """)
+                db.execute(delete_query)
+                db.commit()
 
-                sql_query = text(f"""
-                        COPY INTO {self.database}.{BikeRide.__table_args__['schema']}.{BikeRide.__tablename__}
+                copy_query = text(f"""
+                        COPY INTO {self.database}.{StagingBikeRide.__table_args__['schema']}.{StagingBikeRide.__tablename__}
                         FROM (
                         SELECT 
                             $1:ride_id,
@@ -1629,34 +1616,47 @@ class LoadTransformedDataToSnowflake:
                             CURRENT_TIMESTAMP() AS created_at,
                             CURRENT_TIMESTAMP() AS updated_at
                             FROM
-                            @{self.database}.{BikeRide.__table_args__['schema']}.{self.stage_name}
+                            @{self.database}.{StagingBikeRide.__table_args__['schema']}.{self.stage_name}
                             )
-                            PATTERN = '.*parquet'
+                            PATTERN = '.*{self.batch_year}.*{self.batch_week}.*\\.parquet'
                             ON_ERROR = 'ABORT_STATEMENT'
                             PURGE = FALSE
-                            FORCE = FALSE
+                            FORCE = TRUE
                             FILE_FORMAT = (
                             TYPE = 'parquet')
                         """
                         )
-                            
-                sql_query = db.execute(sql_query)
-                cluster_query = text(f"ALTER TABLE {self.database}.{BikeRide.__table_args__['schema']}.{BikeRide.__tablename__} CLUSTER BY (ride_id, member_casual, started_at, end_station_id, start_station_id, ended_at);")
-                db.execute(cluster_query)
+                
+                copy_query_result = db.execute(copy_query)
                 db.commit()
 
-                no_records_loaded = db.query(BikeRide).count()
+                copy_stats = copy_query_result.fetchall()
+                print("copy_stats", copy_stats)
+                
+                if copy_stats and len(copy_stats) > 1:
+                    no_records_parsed = sum([stat[2] for stat in copy_stats])
+                    no_records_loaded = sum([stat[3] for stat in copy_stats])
+                
+                else:
+                    no_records_parsed = 0
+                    no_records_loaded = 0
+                
+                total_table_records = db.query(StagingBikeRide).count()
 
                 logger.info({
                     "status": "success",
-                    "message": f"Successfully loaded data from stage: {self.stage_name} to table: {BikeRide.__tablename__}",
-                    "no_of_new_records": no_records_loaded
+                    "message": f"Successfully copied data from stage: '{self.stage_name}' to staging table: '{StagingBikeRide.__tablename__}'",
+                    "no_records_parsed": no_records_parsed,
+                    "no_records_loaded": no_records_loaded,
+                    "total_staging_table_records": total_table_records
                 })
                 
                 return {
                     "status": "success",
-                    "message": f"Successfully loaded data from stage: {self.stage_name} to table: {BikeRide.__tablename__}",
-                    "no_of_new_records": no_records_loaded
+                    "message": f"Successfully copied data from stage: '{self.stage_name}' to staging table: '{StagingBikeRide.__tablename__}'",
+                    "no_records_parsed": no_records_parsed,
+                    "no_records_loaded": no_records_loaded,
+                    "total_staging_table_records": total_table_records
                 }
             
         except Exception as e:
@@ -1675,6 +1675,129 @@ class LoadTransformedDataToSnowflake:
                 "error": formatted_error
             })
 
+    def merge_to_target_table(
+                self,
+        ) -> Dict:
+            """
+            This function merges from the Snowflake staging table to the raw table.
+
+            It uses a MERGE statement to update existing records in the target table if there are any changes in the source data, and insert new records that do not exist in the target table.
+            
+            The merge is based on the ride_id as the unique identifier for each record.
+
+            Args:
+                None
+
+            Returns:
+                Dict: A dictionary containing the status, message, and number of new records loaded
+            """
+            try:
+            
+                with create_session(self.connection_string) as db:
+
+                    merge_query = text(f"""
+                            MERGE INTO {self.database}.{BikeRide.__table_args__['schema']}.{BikeRide.__tablename__} AS target
+                                USING ( SELECT * FROM {self.database}.{StagingBikeRide.__table_args__['schema']}.{StagingBikeRide.__tablename__} 
+                                WHERE WEEK(started_at) = '{self.batch_week}' AND YEAR(started_at) = '{self.batch_year}'
+                                ) AS source
+                                ON target.ride_id = source.ride_id
+
+                                WHEN MATCHED THEN UPDATE SET
+                                    started_at = source.started_at,
+                                    ended_at = source.ended_at,
+                                    start_station_name = source.start_station_name,
+                                    start_station_id = source.start_station_id,
+                                    end_station_name = source.end_station_name,
+                                    end_station_id = source.end_station_id,
+                                    start_lat = source.start_lat,
+                                    start_lng = source.start_lng,
+                                    end_lat = source.end_lat,
+                                    end_lng = source.end_lng,
+                                    member_casual = source.member_casual,
+                                    updated_at = CURRENT_TIMESTAMP()
+
+                                WHEN NOT MATCHED THEN
+                                INSERT (
+                                    ride_id,
+                                    rideable_type,
+                                    started_at,
+                                    ended_at,
+                                    start_station_name,
+                                    start_station_id,
+                                    end_station_name,
+                                    end_station_id,
+                                    start_lat,
+                                    start_lng,
+                                    end_lat,
+                                    end_lng,
+                                    member_casual,
+                                    created_at,
+                                    updated_at
+                                )
+                                VALUES (
+                                    source.ride_id,
+                                    source.rideable_type,
+                                    source.started_at,
+                                    source.ended_at,
+                                    source.start_station_name,
+                                    source.start_station_id,
+                                    source.end_station_name,
+                                    source.end_station_id,
+                                    source.start_lat,
+                                    source.start_lng,
+                                    source.end_lat,
+                                    source.end_lng,
+                                    source.member_casual,
+                                    CURRENT_TIMESTAMP(),
+                                    CURRENT_TIMESTAMP()
+                                )
+                            """
+                            )
+
+
+                    merge_query_result = db.execute(merge_query)
+                    db.commit()
+
+                    merge_stats = merge_query_result.fetchall()[0]
+                    print("merge_stats", merge_stats)
+                    no_records_inserted = merge_stats[0]
+                    no_records_updated = merge_stats[1]
+                    total_records_affected = no_records_inserted + no_records_updated
+                    total_table_records = db.query(BikeRide).count()
+
+                    logger.info({
+                        "status": "success",
+                        "message": f"Successfully merged from staging table to target table: '{BikeRide.__tablename__}'",
+                        "no_of_new_records_affected": total_records_affected,
+                        "no_of_records_inserted": no_records_inserted,
+                        "no_of_records_updated": no_records_updated,
+                        "total_raw_table_records": total_table_records
+                    })
+                    
+                    return {
+                        "status": "success",
+                        "message": f"Successfully merged from staging table to target table: '{BikeRide.__tablename__}'",
+                        "no_of_new_records_affected": total_records_affected,
+                        "no_of_records_inserted": no_records_inserted,
+                        "no_of_records_updated": no_records_updated,
+                        "total_raw_table_records": total_table_records
+                    }
+                
+            except Exception as e:
+                try:
+                    formatted_error = ast.literal_eval(str(e))
+                except SyntaxError as se:
+                    formatted_error = str(e)
+                error_logger.error({
+                    "status": "error",
+                    "message": "An error occurred while loading data from staging table to raw table",
+                    "error": formatted_error
+                })
+                raise Exception({
+                    "status": "error",
+                    "message": "An error occurred while loading data from staging to raw table",
+                    "error": formatted_error
+                })
 
 def process_stream(
                    raw_s3_config: Dict,
@@ -1905,8 +2028,29 @@ def process_stream(
 # raw_bucket_folder = S3_CONFIG['raw_bucket_folder']
 # raw_bucket_metadata_prefix = S3_CONFIG['raw_bucket_metadata_prefix']
 # raw_bucket_weekly_dump_prefix = S3_CONFIG['raw_bucket_weekly_dump_prefix']
-# batch_year = '2022' #all rides are in the year december, 2022
-# batch_week = '48' #week 48 for testing, first week of december
+
+# logical_date = datetime(2022, 12, 15)
+
+# def get_batch_week(logical_date: datetime) -> dict:
+
+#     days_to_monday = logical_date.weekday()
+#     execution_week_monday = logical_date - timedelta(days=days_to_monday)
+#     preceding_week_monday = execution_week_monday - timedelta(days=7)
+
+#     iso = preceding_week_monday.isocalendar()
+#     batch_week = iso.week
+#     batch_year = iso.year
+#     batch_week = str(batch_week)
+#     batch_year = str(batch_year)
+#     logger.info(f"get_batch_week, batch_year: {batch_year}, batch_week: {batch_week}")
+
+#     return {
+#         "batch_week": batch_week,
+#         "batch_year": batch_year
+#     }
+    
+# batch_week = get_batch_week(logical_date)['batch_week']
+# batch_year = get_batch_week(logical_date)['batch_year']
 
 # extraction_status = extract_and_validate_source_data(
 #             aws_access_key,
@@ -1925,7 +2069,7 @@ def process_stream(
 
 # load_to_raw_buk_obj = LoadToRawS3(S3_CONFIG)
     
-# load_to_raw_bucket_status = load_to_raw_buk_obj.load_raw_data_with_partitioning(
+# load_to_raw_bucket_status = load_to_raw_buk_obj.load_raw_data(
 #         extracted_dump_s3_key,
 #         batch_year,
 #         batch_week
@@ -1941,7 +2085,6 @@ def process_stream(
 
 # processed_s3_key = process_raw_data_status['processed_data_key']
 
-
 # processed_s3_key = str(processed_s3_key)
 # validate_processed_data_status = validate_processed_data(S3_CONFIG,
 #                                                             processed_s3_key)
@@ -1950,32 +2093,21 @@ def process_stream(
 # load_processed_data_to_s3 = LoadToTransformedS3(S3_CONFIG).process_rides_with_partitioning(processed_s3_key)
 
 # load_to_snowflake = LoadTransformedDataToSnowflake(
-#         SNOWFLAKE_CONFIG
+#         SNOWFLAKE_CONFIG,
+#         batch_year=batch_year,
+#         batch_week=batch_week
 #     )
-# load_status = load_to_snowflake.load_from_stage_to_table()
 
-# if load_status['status'] != 'success':
+# copy_to_staging_status = load_to_snowflake.copy_to_staging_table()
+
+# if copy_to_staging_status['status'] != 'success':
 #     raise Exception({
 #         "status": "error",
 #         "message": "Failed to load data from transformed S3 to Snowflake",
-#         "error": load_status['error']
+#         "error": copy_to_staging_status['error']
 #     })
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# merge_to_raw_target_status = load_to_snowflake.merge_to_target_table()
 
 
 
@@ -1989,9 +2121,9 @@ raw_bucket_folder = S3_CONFIG['raw_bucket_folder']
 raw_bucket_metadata_prefix = S3_CONFIG['raw_bucket_metadata_prefix']
 raw_bucket_weekly_dump_prefix = S3_CONFIG['raw_bucket_weekly_dump_prefix']
 
-def get_batch_week_task(**context) -> Dict:
-    # execution_date = context["logical_date"]
-    execution_date = context['dag'].__dict__['default_args']['start_date']
+def get_batch_week_task(**context) -> None:
+    execution_date = context["logical_date"]
+    # execution_date = context['dag'].__dict__['default_args']['start_date']
 
     days_to_monday = execution_date.weekday()
     execution_week_monday = execution_date - timedelta(days=days_to_monday)
@@ -2000,6 +2132,7 @@ def get_batch_week_task(**context) -> Dict:
     iso = preceding_week_monday.isocalendar()
     batch_week = iso.week
     batch_year = iso.year
+    
     logger.info(f"get_batch_week_task, batch_year: {batch_year}, batch_week: {batch_week}")
 
     context["ti"].xcom_push(key="batch_week", value=batch_week)
@@ -2166,15 +2299,32 @@ def load_processed_data_to_s3_task(**context) -> None:
         "no_partitions": load_processed_data_to_s3['no_partitions']
     })
 
-def load_processed_s3_data_to_snowflake_task(**context) -> None:
+def load_snowflake_stage_to_staging_table_task(**context) -> None:
     load_to_snowflake = LoadTransformedDataToSnowflake(
-        SNOWFLAKE_CONFIG
+        SNOWFLAKE_CONFIG,
+        batch_year = str(context['ti'].xcom_pull(key='batch_year', task_ids='get_batch_week')),
+        batch_week = str(context['ti'].xcom_pull(key='batch_week', task_ids='get_batch_week'))
     )
-    load_status = load_to_snowflake.load_from_stage_to_table()
+    copy_to_staging_status = load_to_snowflake.copy_to_staging_table()
 
-    if load_status['status'] != 'success':
+    if copy_to_staging_status['status'] != 'success':
         raise Exception({
             "status": "error",
-            "message": "Failed to load data from transformed S3 to Snowflake",
-            "error": load_status['error']
+            "message": "Failed to load data from snowflake stage to staging table",
+            "error": copy_to_staging_status['error']
+        })
+
+def merge_staging_to_raw_table_task(**context) -> None:
+    load_to_snowflake = LoadTransformedDataToSnowflake(
+        SNOWFLAKE_CONFIG,
+        batch_year= str(context['ti'].xcom_pull(key='batch_year', task_ids='get_batch_week')),
+        batch_week= str(context['ti'].xcom_pull(key='batch_week', task_ids='get_batch_week'))
+    )
+    merge_to_raw_target_status = load_to_snowflake.merge_to_target_table()
+
+    if merge_to_raw_target_status['status'] != 'success':
+        raise Exception({
+            "status": "error",
+            "message": "Failed to merge data from staging table to raw table in Snowflake",
+            "error": merge_to_raw_target_status['error']
         })
