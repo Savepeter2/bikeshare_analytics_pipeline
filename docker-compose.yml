@@ -4,14 +4,13 @@ x-airflow-common:
   image: bikeshare-pipeline:1.0
   env_file:
     &airflow-common-env
-    - secrets.ini
+    - .env
   volumes:
     &airflow-common-volumes
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./src:/opt/airflow/src
     - ./configs:/opt/airflow/configs
-    - ./secrets.ini:/opt/airflow/secrets.ini
     - ./templates:/opt/airflow/templates
   depends_on:
     &airflow-common-depends-on
@@ -63,7 +62,7 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - secrets.ini
+      - .env
     entrypoint: >
       bash -c "
         airflow db migrate && 
@@ -74,7 +73,6 @@ services:
       - ./logs:/opt/airflow/logs
       - ./src:/opt/airflow/src
       - ./configs:/opt/airflow/configs
-      - ./secrets.ini:/opt/airflow/secrets.ini
       - ./templates:/opt/airflow/templates
 
   airflow-apiserver:
