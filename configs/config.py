@@ -2,44 +2,83 @@ import os
 import sys
 from typing import Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import configparser
+# import configparser
 
-config = configparser.RawConfigParser()
-secrets_config = config.read('secrets.ini')
+# config = configparser.RawConfigParser()
+# secrets_config = config.read('secrets.ini')
 
 
-log_file_name = config['LOGGING']['log_file_name']
-error_log_file_name = config['LOGGING']['error_log_file_name']
-var_dir = config['LOGGING']['var_dir']
-AWS_ACCESS_KEY = config['AWS_CREDENTIALS']['AWS_ACCESS_KEY']
-AWS_SECRET_KEY = config['AWS_CREDENTIALS']['AWS_SECRET_ACCESS_KEY']
-AWS_REGION = config['AWS_CREDENTIALS']['AWS_REGION']
-S3_RAW_BUCKET = config['AWS_CREDENTIALS']['S3_RAW_BUCKET']
-RAW_S3_KEY = config['AWS_CREDENTIALS']['RAW_S3_KEY']
-TRANSFORMED_BUCKET = config['AWS_CREDENTIALS']['TRANSFORMED_BUCKET']
-TRANSFORMED_BUCKET_FOLDER = config['AWS_CREDENTIALS']['TRANSFORMED_BUCKET_FOLDER']
-TRANSFORMED_BUCKET_METADATA_PREFIX = config['AWS_CREDENTIALS']['TRANSFORM_BUCKET_METADATA_PREFIX']
-RAW_DATA_PATH = config['LOCAL']['RAW_DATA_PATH']
-RAW_BUCKET_FOLDER = config['AWS_CREDENTIALS']['RAW_BUCKET_FOLDER']
-RAW_BUCKET_METADATA_PREFIX = config['AWS_CREDENTIALS']['RAW_BUCKET_METADATA_PREFIX']
-RAW_BUCKET_WEEKLY_DUMP_PREFIX = config['AWS_CREDENTIALS']['RAW_BUCKET_WEEKLY_DUMP_PREFIX']
-SNOWFLAKE_ACCOUNT = config['SNOWFLAKE']['snowflake_account']
-SNOWFLAKE_USERNAME = config['SNOWFLAKE']['snowflake_username']
-SNOWFLAKE_PASSWORD = config['SNOWFLAKE']['snowflake_password']
-SNOWFLAKE_WAREHOUSE = config['SNOWFLAKE']['snowflake_warehouse']
-SNOWFLAKE_DATABASE = config['SNOWFLAKE']['snowflake_database']
-SNOWFLAKE_SCHEMA = config['SNOWFLAKE']['snowflake_schema']
-SNOWFLAKE_ROLE = config['SNOWFLAKE']['snowflake_role']
-STAGE_NAME = config['SNOWFLAKE']['stage_name']
-SOURCE_BUCKET = config['AWS_CREDENTIALS']['SOURCE_BUCKET']
-SOURCE_S3_KEY = config['AWS_CREDENTIALS']['SOURCE_S3_KEY']
-AIRFLOW_MAIL_USERS = config['AIRFLOW']['MAIL_USERNAMES']
-AIRFLOW_MAIL_SUBJECT_TEMPLATE = config['AIRFLOW_EMAIL']['AIRFLOW__EMAIL__SUBJECT_TEMPLATE']
-AIRFLOW_MAIL_HTML_TEMPLATE = config['AIRFLOW_EMAIL']['AIRFLOW__EMAIL__HTML_CONTENT_TEMPLATE']
-SLACK_BOT_OAUTH_TOKEN = config['SLACK']['SLACK_BOT_OAUTH_TOKEN']
-SLACK_CHANNEL_ID = config['SLACK']['CHANNEL_ID']
-SLACK_BOT_NAME = config['SLACK']['SLACK_BOT_NAME']  
-CHUNK_SIZE = int(config['ETL']['CHUNK_SIZE'])
+# log_file_name = config['LOGGING']['log_file_name']
+# error_log_file_name = config['LOGGING']['error_log_file_name']
+# var_dir = config['LOGGING']['var_dir']
+# AWS_ACCESS_KEY = config['AWS_CREDENTIALS']['AWS_ACCESS_KEY']
+# AWS_SECRET_KEY = config['AWS_CREDENTIALS']['AWS_SECRET_ACCESS_KEY']
+# AWS_REGION = config['AWS_CREDENTIALS']['AWS_REGION']
+# S3_RAW_BUCKET = config['AWS_CREDENTIALS']['S3_RAW_BUCKET']
+# RAW_S3_KEY = config['AWS_CREDENTIALS']['RAW_S3_KEY']
+# TRANSFORMED_BUCKET = config['AWS_CREDENTIALS']['TRANSFORMED_BUCKET']
+# TRANSFORMED_BUCKET_FOLDER = config['AWS_CREDENTIALS']['TRANSFORMED_BUCKET_FOLDER']
+# TRANSFORMED_BUCKET_METADATA_PREFIX = config['AWS_CREDENTIALS']['TRANSFORM_BUCKET_METADATA_PREFIX']
+# RAW_DATA_PATH = config['LOCAL']['RAW_DATA_PATH']
+# RAW_BUCKET_FOLDER = config['AWS_CREDENTIALS']['RAW_BUCKET_FOLDER']
+# RAW_BUCKET_METADATA_PREFIX = config['AWS_CREDENTIALS']['RAW_BUCKET_METADATA_PREFIX']
+# RAW_BUCKET_WEEKLY_DUMP_PREFIX = config['AWS_CREDENTIALS']['RAW_BUCKET_WEEKLY_DUMP_PREFIX']
+# SNOWFLAKE_ACCOUNT = config['SNOWFLAKE']['snowflake_account']
+# SNOWFLAKE_USERNAME = config['SNOWFLAKE']['snowflake_username']
+# SNOWFLAKE_PASSWORD = config['SNOWFLAKE']['snowflake_password']
+# SNOWFLAKE_WAREHOUSE = config['SNOWFLAKE']['snowflake_warehouse']
+# SNOWFLAKE_DATABASE = config['SNOWFLAKE']['snowflake_database']
+# SNOWFLAKE_SCHEMA = config['SNOWFLAKE']['snowflake_schema']
+# SNOWFLAKE_ROLE = config['SNOWFLAKE']['snowflake_role']
+# STAGE_NAME = config['SNOWFLAKE']['stage_name']
+# SOURCE_BUCKET = config['AWS_CREDENTIALS']['SOURCE_BUCKET']
+# SOURCE_S3_KEY = config['AWS_CREDENTIALS']['SOURCE_S3_KEY']
+# AIRFLOW_MAIL_USERS = config['AIRFLOW']['MAIL_USERNAMES']
+# AIRFLOW_MAIL_SUBJECT_TEMPLATE = config['AIRFLOW_EMAIL']['AIRFLOW__EMAIL__SUBJECT_TEMPLATE']
+# AIRFLOW_MAIL_HTML_TEMPLATE = config['AIRFLOW_EMAIL']['AIRFLOW__EMAIL__HTML_CONTENT_TEMPLATE']
+# SLACK_BOT_OAUTH_TOKEN = config['SLACK']['SLACK_BOT_OAUTH_TOKEN']
+# SLACK_CHANNEL_ID = config['SLACK']['CHANNEL_ID']
+# SLACK_BOT_NAME = config['SLACK']['SLACK_BOT_NAME']  
+# CHUNK_SIZE = int(config['ETL']['CHUNK_SIZE'])
+
+
+
+
+log_file_name = os.getenv('log_file_name')
+error_log_file_name = os.getenv('error_log_file_name')
+var_dir = os.getenv('var_dir')
+AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY')
+AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_REGION = os.getenv('AWS_REGION')
+S3_RAW_BUCKET = os.getenv('S3_RAW_BUCKET')
+RAW_S3_KEY = os.getenv('RAW_S3_KEY')
+TRANSFORMED_BUCKET = os.getenv('TRANSFORMED_BUCKET')
+TRANSFORMED_BUCKET_FOLDER = os.getenv('TRANSFORMED_BUCKET_FOLDER')
+TRANSFORMED_BUCKET_METADATA_PREFIX = os.getenv('TRANSFORM_BUCKET_METADATA_PREFIX')
+RAW_DATA_PATH = os.getenv('RAW_DATA_PATH')
+RAW_BUCKET_FOLDER = os.getenv('RAW_BUCKET_FOLDER')
+RAW_BUCKET_METADATA_PREFIX = os.getenv('RAW_BUCKET_METADATA_PREFIX')
+RAW_BUCKET_WEEKLY_DUMP_PREFIX = os.getenv('RAW_BUCKET_WEEKLY_DUMP_PREFIX')
+SNOWFLAKE_ACCOUNT = os.getenv('SNOWFLAKE_ACCOUNT')
+SNOWFLAKE_USERNAME = os.getenv('SNOWFLAKE_USERNAME')
+SNOWFLAKE_PASSWORD = os.getenv('SNOWFLAKE_PASSWORD')
+SNOWFLAKE_WAREHOUSE = os.getenv('SNOWFLAKE_WAREHOUSE')
+SNOWFLAKE_DATABASE = os.getenv('SNOWFLAKE_DATABASE')
+SNOWFLAKE_SCHEMA = os.getenv('SNOWFLAKE_SCHEMA')
+SNOWFLAKE_ROLE = os.getenv('SNOWFLAKE_ROLE')
+STAGE_NAME = os.getenv('STAGE_NAME')
+SOURCE_BUCKET = os.getenv('SOURCE_BUCKET')
+SOURCE_S3_KEY = os.getenv('SOURCE_S3_KEY')
+AIRFLOW_MAIL_USERS = os.getenv('AIRFLOW_MAIL_USERS')
+AIRFLOW_MAIL_SUBJECT_TEMPLATE = os.getenv('AIRFLOW_MAIL_SUBJECT_TEMPLATE')
+AIRFLOW_MAIL_HTML_TEMPLATE = os.getenv('AIRFLOW_MAIL_HTML_TEMPLATE')
+SLACK_BOT_OAUTH_TOKEN = os.getenv('SLACK_BOT_OAUTH_TOKEN')
+SLACK_CHANNEL_ID = os.getenv('SLACK_CHANNEL_ID')
+SLACK_BOT_NAME = os.getenv('SLACK_BOT_NAME')
+CHUNK_SIZE = int(os.getenv('CHUNK_SIZE'))
+
+
+
 
 S3_CONFIG = {
             'raw_bucket': S3_RAW_BUCKET,
@@ -136,4 +175,3 @@ def create_log_file(
 log_file_path, error_log_file_path = create_log_file(
     log_file_name, error_log_file_name, var_dir
 )
-
