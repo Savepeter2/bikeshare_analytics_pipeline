@@ -1,0 +1,85 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: 
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+      
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name bikeshare-dev-cluster --region us-east-1
+      
+      - name: Install External Secrets Operator
+        run: |
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update
+          helm upgrade --install external-secrets external-secrets/external-secrets \
+            --namespace external-secrets \
+            --create-namespace \
+            --wait
+      
+      - name: Apply ClusterSecretStore
+        run: kubectl apply -f kubernetes/cluster-secret-store.yaml
+
+      - name: Apply ExternalSecrets
+        run: |
+          kubectl apply -f kubernetes/external-secrets/airflow-core-external-secret.yaml
+          kubectl apply -f kubernetes/external-secrets/dbt-snowflake-external-secret.yaml
+      
+      - name: Wait for ExternalSecrets to sync
+        run: |
+          kubectl wait externalsecret airflow-core-secrets \
+            --for=condition=Ready \
+            --timeout=60s \
+            --namespace bikeshare-dev-ns
+          kubectl wait externalsecret bikeshare-dbt-secrets \
+            --for=condition=Ready \
+            --timeout=60s \
+            --namespace bikeshare-dev-ns
+
+      - name: Deploy Airflow via Helm
+        run: |
+          helm repo add apache-airflow https://airflow.apache.org
+          helm repo update
+          helm upgrade --install airflow apache-airflow/airflow \
+            --version 3.7.1 \
+            -f kubernetes/dev-values.yaml \
+            --namespace bikeshare-dev-ns \
+            --set images.airflow.repository=docker.io/savepeter2/bikeshare-pipeline \
+            --set images.airflow.tag=dev \
+            --create-namespace \
+            --wait      
+      
+      - name: Sync DAGs to S3
+        run: |
+          aws s3 sync ./dags/ s3://bikeshare-pipeline-dev/dags/ \
+            --delete --exclude "*.pyc" --exclude "__pycache__/*"
+      
+      # - name: Run smoke tests
+      #   run: poetry run pytest tests/e2e/smoke_tests.py
+      
+      - name: Notify Slack
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
