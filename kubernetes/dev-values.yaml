@@ -1,0 +1,176 @@
+# =============================================================================
+# Core Airflow Config
+# =============================================================================
+airflowVersion: "3.1.7"
+executor: CeleryExecutor  # 👈 add this at the top level
+
+images:
+  airflow:
+    repository: docker.io/savepeter2/bikeshare-pipeline
+    tag: dev
+
+# Inject all secrets from K8s secrets created by External Secrets Operator
+envFrom:
+  - secretRef:
+      name: airflow-core-secrets      
+  - secretRef:
+      name: bikeshare-dbt-secrets     
+
+# =============================================================================
+# DAGs - sync from S3
+# =============================================================================
+dags:
+  gitSync:
+    enabled: false
+  persistence:
+    enabled: false
+
+# Use S3 for DAG storage
+config:
+  core:
+    dags_folder: "/opt/airflow/dags"
+
+# =============================================================================
+# Scheduler
+# =============================================================================
+scheduler:
+  replicas: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# =============================================================================
+# Worker
+# =============================================================================
+workers:
+  replicas: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  envFrom:
+    - secretRef:
+        name: airflow-core-secrets
+    - secretRef:
+        name: bikeshare-dbt-secrets
+
+# =============================================================================
+# API Server (replaces Webserver in Airflow 3.x)
+# =============================================================================
+apiServer:
+  replicas: 1
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  service:
+    type: ClusterIP
+
+# =============================================================================
+# Triggerer
+# =============================================================================
+triggerer:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# =============================================================================
+# Redis (Celery broker)
+# =============================================================================
+redis:
+  enabled: true
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# =============================================================================
+# PostgreSQL (Airflow metadata DB)
+# =============================================================================
+postgresql:
+  enabled: true
+  auth:
+    username: airflow
+    database: airflow
+    existingSecret: airflow-core-secrets
+    secretKeys:
+      adminPasswordKey: POSTGRES_PASSWORD
+
+serviceAccount:
+  create: true
+  name: airflow-worker
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::356315793531:role/airflow-secrets-bucket-access-role"  # update this
+    
+
+env:
+  - name: AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT
+    value: "4500"
+  - name: AIRFLOW__CORE__DAG_FILE_PROCESSOR_TIMEOUT
+    value: "600"
+  - name: AIRFLOW__CORE__DEFAULT_TIMEZONE
+    value: "Africa/Lagos"
+  - name: AIRFLOW__CORE__DEFAULT_UI_TIMEZONE
+    value: "Africa/Lagos"
+  - name: AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG
+    value: "1"
+  - name: AIRFLOW__CORE__EXECUTOR
+    value: "CeleryExecutor"
+  - name: AIRFLOW__CORE__AUTH_MANAGER
+    value: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+  - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+    value: "postgresql+psycopg2://airflow:airflow@postgres/airflow"
+  - name: AIRFLOW__CELERY__RESULT_BACKEND
+    value: "db+postgresql://airflow:airflow@postgres/airflow"
+  - name: AIRFLOW__CELERY__BROKER_URL
+    value: "redis://:@redis:6379/0"
+  - name: AIRFLOW__CORE__FERNET_KEY
+    value: "62le5yBWBWnuNVr7woP86ClLTRLtJmGRnzghSpXbPP4="
+  - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+    value: "true"
+  - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
+    value: "http://airflow-apiserver:8080/execution/"
+  - name: AIRFLOW__CORE__INTERNAL_API_URL
+    value: "http://airflow-apiserver:8080"  # adjust hostname
+  - name: AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK
+    value: "true"
+  - name: AIRFLOW__CORE__LOAD_EXAMPLES
+    value: "false"
+  - name: AIRFLOW__API_AUTH__JWT_EXPIRATION_TIME
+    value: "259200"
+  - name: AIRFLOW__API_AUTH__JWT_SECRET
+    value: "5A9GBwq7Jx5zgIU/uB7yxQ=="
+  - name: AIRFLOW__API__SECRET_KEY
+    value: "LRT8Pix/goIOoSsa3vW/ZA=="
+  - name: AIRFLOW__CELERY__WORKER_CONCURRENCY
+    value: "2"
+  - name: AIRFLOW__CELERY__WORKER_POOL
+    value: "solo"
+  - name: AIRFLOW__CELERY__OPERATION_TIMEOUT
+    value: "10"
+  - name: AIRFLOW__CORE__DAGS_FOLDER
+    value: "/opt/airflow/dags"
+  - name: AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL
+    value: "30"  # how often to check for new DAGs
+
+
+namespaceOverride: "bikeshare-dev-ns"
