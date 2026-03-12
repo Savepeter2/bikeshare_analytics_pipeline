@@ -15,7 +15,7 @@ from configs.config import (RAW_S3_KEY, RAW_DATA_PATH, S3_RAW_BUCKET,
                             TRANSFORMED_BUCKET, 
                             CHUNK_SIZE, 
                              S3_CONFIG, SNOWFLAKE_CONFIG)
-from src.models import create_session
+from src.models import create_session   
 import pandas as pd
 import boto3
 from datetime import datetime
@@ -2019,98 +2019,6 @@ def process_stream(
 
  
 
-# chunk_size = CHUNK_SIZE
-# aws_access_key = S3_CONFIG['access_key']
-# aws_secret_access = S3_CONFIG['secret_key']
-# source_bucket = S3_CONFIG['source_bucket']
-# raw_bucket = S3_CONFIG['raw_bucket']
-# source_s3_key = S3_CONFIG['source_s3_key']
-# raw_bucket_folder = S3_CONFIG['raw_bucket_folder']
-# raw_bucket_metadata_prefix = S3_CONFIG['raw_bucket_metadata_prefix']
-# raw_bucket_weekly_dump_prefix = S3_CONFIG['raw_bucket_weekly_dump_prefix']
-
-# logical_date = datetime(2022, 12, 15)
-
-# def get_batch_week(logical_date: datetime) -> dict:
-
-#     days_to_monday = logical_date.weekday()
-#     execution_week_monday = logical_date - timedelta(days=days_to_monday)
-#     preceding_week_monday = execution_week_monday - timedelta(days=7)
-
-#     iso = preceding_week_monday.isocalendar()
-#     batch_week = iso.week
-#     batch_year = iso.year
-#     batch_week = str(batch_week)
-#     batch_year = str(batch_year)
-#     logger.info(f"get_batch_week, batch_year: {batch_year}, batch_week: {batch_week}")
-
-#     return {
-#         "batch_week": batch_week,
-#         "batch_year": batch_year
-#     }
-    
-# batch_week = get_batch_week(logical_date)['batch_week']
-# batch_year = get_batch_week(logical_date)['batch_year']
-
-# extraction_status = extract_and_validate_source_data(
-#             aws_access_key,
-#             aws_secret_access,
-#             source_bucket,
-#             source_s3_key,
-#             raw_bucket,
-#             raw_bucket_weekly_dump_prefix, 
-#             batch_year, #all rides are in the year december, 2022
-#             batch_week, #week 48 for testing, first week of december
-#             chunk_size, #chunk size 1000 for testing
-#             raw_data_schema
-#         )
-
-# extracted_dump_s3_key = extraction_status['extracted_dump_s3_key']
-
-# load_to_raw_buk_obj = LoadToRawS3(S3_CONFIG)
-    
-# load_to_raw_bucket_status = load_to_raw_buk_obj.load_raw_data(
-#         extracted_dump_s3_key,
-#         batch_year,
-#         batch_week
-#     )
-
-# process_raw_data_obj = LoadToTransformedS3(s3_config = S3_CONFIG
-# )   
-
-# process_raw_data_status = process_raw_data_obj.process_raw_data(
-#     extracted_dump_s3_key=extracted_dump_s3_key,
-#     raw_data_schema=raw_data_schema
-# )
-
-# processed_s3_key = process_raw_data_status['processed_data_key']
-
-# processed_s3_key = str(processed_s3_key)
-# validate_processed_data_status = validate_processed_data(S3_CONFIG,
-#                                                             processed_s3_key)
-
-# processed_s3_key = str(processed_s3_key)
-# load_processed_data_to_s3 = LoadToTransformedS3(S3_CONFIG).process_rides_with_partitioning(processed_s3_key)
-
-# load_to_snowflake = LoadTransformedDataToSnowflake(
-#         SNOWFLAKE_CONFIG,
-#         batch_year=batch_year,
-#         batch_week=batch_week
-#     )
-
-# copy_to_staging_status = load_to_snowflake.copy_to_staging_table()
-
-# if copy_to_staging_status['status'] != 'success':
-#     raise Exception({
-#         "status": "error",
-#         "message": "Failed to load data from transformed S3 to Snowflake",
-#         "error": copy_to_staging_status['error']
-#     })
-
-# merge_to_raw_target_status = load_to_snowflake.merge_to_target_table()
-
-
-
 chunk_size = CHUNK_SIZE
 aws_access_key = S3_CONFIG['access_key']
 aws_secret_access = S3_CONFIG['secret_key']
@@ -2121,210 +2029,316 @@ raw_bucket_folder = S3_CONFIG['raw_bucket_folder']
 raw_bucket_metadata_prefix = S3_CONFIG['raw_bucket_metadata_prefix']
 raw_bucket_weekly_dump_prefix = S3_CONFIG['raw_bucket_weekly_dump_prefix']
 
-def get_batch_week_task(**context) -> None:
-    execution_date = context["logical_date"]
-    # execution_date = context['dag'].__dict__['default_args']['start_date']
+logical_date = datetime(2022, 12, 15)
 
-    days_to_monday = execution_date.weekday()
-    execution_week_monday = execution_date - timedelta(days=days_to_monday)
+def get_batch_week(logical_date: datetime) -> dict:
+
+    days_to_monday = logical_date.weekday()
+    execution_week_monday = logical_date - timedelta(days=days_to_monday)
     preceding_week_monday = execution_week_monday - timedelta(days=7)
 
     iso = preceding_week_monday.isocalendar()
     batch_week = iso.week
     batch_year = iso.year
-    
-    logger.info(f"get_batch_week_task, batch_year: {batch_year}, batch_week: {batch_week}")
-
-    context["ti"].xcom_push(key="batch_week", value=batch_week)
-    context["ti"].xcom_push(key="batch_year", value=batch_year)
-
-def extract_and_validate_source_task(**context) -> None:
-    ti = context["ti"]
-
-    batch_week = ti.xcom_pull(key="batch_week", task_ids="get_batch_week")
-    batch_year = ti.xcom_pull(key="batch_year", task_ids="get_batch_week")
-
-    if not batch_week or not batch_year:
-        raise Exception({
-            "status": "error",
-            "message": "batch_week or batch_year from 'get_batch_week' XCom is None"
-        })
-
     batch_week = str(batch_week)
     batch_year = str(batch_year)
+    logger.info(f"get_batch_week, batch_year: {batch_year}, batch_week: {batch_week}")
 
-    logger.info(f"extract_and_validate_source_task, batch_year: {batch_year}, batch_week: {batch_week}")
-
-    if not isinstance(batch_week, str) or not isinstance(batch_year, str):
-        raise InvalidArgumentTypeError("batch_week or batch_year from XCom is not a string type")
-
-    extraction_status = extract_and_validate_source_data(
-        aws_access_key,
-        aws_secret_access,
-        source_bucket,
-        source_s3_key,
-        raw_bucket,
-        raw_bucket_weekly_dump_prefix,
-        batch_year,
-        batch_week,
-        chunk_size,
-        raw_data_schema,
-    )
-
-    if extraction_status["status"] != "success":
-        raise Exception({
-            "status": "error",
-            "message": "Source data extraction and validation failed",
-            "error": extraction_status["error"],
-        })
+    return {
+        "batch_week": batch_week,
+        "batch_year": batch_year
+    }
     
-    extracted_dump_s3_key = extraction_status["extracted_dump_s3_key"]
+batch_week = get_batch_week(logical_date)['batch_week']
+batch_year = get_batch_week(logical_date)['batch_year']
 
-    ti.xcom_push(key="extracted_dump_s3_key", value=extracted_dump_s3_key)
-    logger.info({
-        "status": "success",
-        "message": "Source data extraction and validation succeeded",
-        "extract_and_validate_status": extraction_status
-    })
+print("aws_access_key", aws_access_key)
+print("aws_secret_access", aws_secret_access)
+print("source_bucket", source_bucket)
+print("raw_bucket", raw_bucket)
+print("source_s3_key", source_s3_key)
+print("raw_bucket_weekly_dump_prefix", raw_bucket_weekly_dump_prefix)
+print("batch_week", batch_week)
+print("batch_year", batch_year)
+print("chunk_size", chunk_size)
+print("raw_data_schema", raw_data_schema)
 
-def load_data_to_raw_bucket_task(**context) -> None:
-    ti = context['ti']
-    extracted_dump_s3_key = ti.xcom_pull(key='extracted_dump_s3_key', task_ids='extract_and_validate_source_data')
-    if not extracted_dump_s3_key:
-        raise Exception({
-            "status": "error",
-            "message": "extracted_dump_s3_key from 'extract_and_validate_source_data' XCom is None"
-        })
+extraction_status = extract_and_validate_source_data(
+            aws_access_key,
+            aws_secret_access,
+            source_bucket,
+            source_s3_key,
+            raw_bucket,
+            raw_bucket_weekly_dump_prefix, 
+            batch_year, #all rides are in the year december, 2022
+            batch_week, #week 48 for testing, first week of december
+            chunk_size, #chunk size 1000 for testing
+            raw_data_schema
+        )
+
+extracted_dump_s3_key = extraction_status['extracted_dump_s3_key']
+
+load_to_raw_buk_obj = LoadToRawS3(S3_CONFIG)
     
-    extracted_dump_s3_key = str(extracted_dump_s3_key)
-    if not isinstance(extracted_dump_s3_key, str):
-        raise InvalidArgumentTypeError("extracted_dump_s3_key must be a string type")
-
-    batch_week = ti.xcom_pull(key='batch_week', task_ids='get_batch_week')
-    batch_year = ti.xcom_pull(key='batch_year', task_ids='get_batch_week')
-    if batch_week is None or batch_year is None:
-        raise Exception({
-            "status": "error",
-            "message": "batch_week or batch_year from 'get_batch_week' Com is None"
-        })
-
-    batch_week = str(batch_week)
-    batch_year = str(batch_year)
-
-    if not isinstance(batch_week, str) or not isinstance(batch_year, str):
-        raise InvalidArgumentTypeError("batch_week or batch_year must be string types")
-
-    logger.info(f"load_data_to_raw_bucket_task, batch_year: {batch_year}, batch_week: {batch_week}")
-    logger.info(f"load_data_to_raw_bucket_task, extracted_dump_s3_key: {extracted_dump_s3_key}")
-    
-    load_to_raw_buk_obj = LoadToRawS3(S3_CONFIG)
-    
-    load_to_raw_buk_obj.load_raw_data(
+load_to_raw_bucket_status = load_to_raw_buk_obj.load_raw_data(
         extracted_dump_s3_key,
         batch_year,
         batch_week
     )
 
-def process_raw_data_task(**context) -> None:
-    ti = context['ti']
-    extracted_dump_s3_key = ti.xcom_pull(key='extracted_dump_s3_key', task_ids='extract_and_validate_source_data')
-    
-    if not extracted_dump_s3_key:
-        raise Exception({
-            "status": "error",
-            "message": "extracted_dump_s3_key from 'extract_and_validate_source_data' XCom is None"
-        })
-    
-    extracted_dump_s3_key = str(extracted_dump_s3_key)
-    if not isinstance(extracted_dump_s3_key, str):
-        raise InvalidArgumentTypeError("extracted_dump_s3_key must be a string type")
-    process_raw_data_obj = LoadToTransformedS3(s3_config = S3_CONFIG)   
+process_raw_data_obj = LoadToTransformedS3(s3_config = S3_CONFIG
+)   
 
-    process_raw_data_status = process_raw_data_obj.process_raw_data(
-        extracted_dump_s3_key=extracted_dump_s3_key,
-        raw_data_schema=raw_data_schema
+process_raw_data_status = process_raw_data_obj.process_raw_data(
+    extracted_dump_s3_key=extracted_dump_s3_key,
+    raw_data_schema=raw_data_schema
+)
+
+processed_s3_key = process_raw_data_status['processed_data_key']
+
+processed_s3_key = str(processed_s3_key)
+validate_processed_data_status = validate_processed_data(S3_CONFIG,
+                                                            processed_s3_key)
+
+processed_s3_key = str(processed_s3_key)
+load_processed_data_to_s3 = LoadToTransformedS3(S3_CONFIG).process_rides_with_partitioning(processed_s3_key)
+
+load_to_snowflake = LoadTransformedDataToSnowflake(
+        SNOWFLAKE_CONFIG,
+        batch_year=batch_year,
+        batch_week=batch_week
     )
-    processed_s3_key = process_raw_data_status['processed_data_key']
-    context['ti'].xcom_push(key='processed_s3_key', value=processed_s3_key)
 
-def validate_processed_data_task(**context) -> None:
-    ti = context['ti']
-    processed_s3_key = ti.xcom_pull(key='processed_s3_key', task_ids='process_raw_data')
-    
-    if not processed_s3_key:
-        raise Exception({
-            "status": "error",
-            "message": "processed_s3_key from 'process_raw_data' XCom is None"
-        })
-    processed_s3_key = str(processed_s3_key)
-    if not isinstance(processed_s3_key, str):
-        raise InvalidArgumentTypeError("processed_s3_key must be a string type")
-    
-    validate_processed_data_status = validate_processed_data(S3_CONFIG,
-                                                              processed_s3_key)
-    if validate_processed_data_status['status'] != 'success':
-        raise Exception({
-            "status": "error",
-            "message": "Processed data validation failed",
-            "error": validate_processed_data_status['error']
-        })
+copy_to_staging_status = load_to_snowflake.copy_to_staging_table()
 
-def load_processed_data_to_s3_task(**context) -> None:
-    
-    ti = context['ti']
-    processed_s3_key = ti.xcom_pull(key='processed_s3_key', task_ids='process_raw_data')
-    if not processed_s3_key:
-        raise Exception({
-            "status": "error",
-            "message": "processed_s3_key from 'process_raw_data' XCom is None"
-        })
-    
-    processed_s3_key = str(processed_s3_key)
-    if not isinstance(processed_s3_key, str):
-        raise InvalidArgumentTypeError("processed_s3_key must be a string type")
-    
-    load_processed_data_to_s3 = LoadToTransformedS3(S3_CONFIG).process_rides_with_partitioning(processed_s3_key)
-
-    if load_processed_data_to_s3['status'] != 'success':
-        raise Exception({
-            "status": "error",
-            "message": "Failed to upload processed data to transformed bucket",
-            "error": load_processed_data_to_s3['error']
-        })
-    
-    logger.info({
-        "status": "success",
-        "message": "Successfully uploaded processed data to transformed bucket",
-        "uploaded_records": load_processed_data_to_s3['uploaded_records'],
-        "no_partitions": load_processed_data_to_s3['no_partitions']
+if copy_to_staging_status['status'] != 'success':
+    raise Exception({
+        "status": "error",
+        "message": "Failed to load data from transformed S3 to Snowflake",
+        "error": copy_to_staging_status['error']
     })
 
-def load_snowflake_stage_to_staging_table_task(**context) -> None:
-    load_to_snowflake = LoadTransformedDataToSnowflake(
-        SNOWFLAKE_CONFIG,
-        batch_year = str(context['ti'].xcom_pull(key='batch_year', task_ids='get_batch_week')),
-        batch_week = str(context['ti'].xcom_pull(key='batch_week', task_ids='get_batch_week'))
-    )
-    copy_to_staging_status = load_to_snowflake.copy_to_staging_table()
+merge_to_raw_target_status = load_to_snowflake.merge_to_target_table()
 
-    if copy_to_staging_status['status'] != 'success':
-        raise Exception({
-            "status": "error",
-            "message": "Failed to load data from snowflake stage to staging table",
-            "error": copy_to_staging_status['error']
-        })
 
-def merge_staging_to_raw_table_task(**context) -> None:
-    load_to_snowflake = LoadTransformedDataToSnowflake(
-        SNOWFLAKE_CONFIG,
-        batch_year= str(context['ti'].xcom_pull(key='batch_year', task_ids='get_batch_week')),
-        batch_week= str(context['ti'].xcom_pull(key='batch_week', task_ids='get_batch_week'))
-    )
-    merge_to_raw_target_status = load_to_snowflake.merge_to_target_table()
 
-    if merge_to_raw_target_status['status'] != 'success':
-        raise Exception({
-            "status": "error",
-            "message": "Failed to merge data from staging table to raw table in Snowflake",
-            "error": merge_to_raw_target_status['error']
-        })
+
+
+
+# chunk_size = CHUNK_SIZE
+# aws_access_key = S3_CONFIG['access_key']
+# aws_secret_access = S3_CONFIG['secret_key']
+# source_bucket = S3_CONFIG['source_bucket']
+# raw_bucket = S3_CONFIG['raw_bucket']
+# source_s3_key = S3_CONFIG['source_s3_key']
+# raw_bucket_folder = S3_CONFIG['raw_bucket_folder']
+# raw_bucket_metadata_prefix = S3_CONFIG['raw_bucket_metadata_prefix']
+# raw_bucket_weekly_dump_prefix = S3_CONFIG['raw_bucket_weekly_dump_prefix']
+
+# def get_batch_week_task(**context) -> None:
+#     execution_date = context["logical_date"]
+#     # execution_date = context['dag'].__dict__['default_args']['start_date']
+
+#     days_to_monday = execution_date.weekday()
+#     execution_week_monday = execution_date - timedelta(days=days_to_monday)
+#     preceding_week_monday = execution_week_monday - timedelta(days=7)
+
+#     iso = preceding_week_monday.isocalendar()
+#     batch_week = iso.week
+#     batch_year = iso.year
+    
+#     logger.info(f"get_batch_week_task, batch_year: {batch_year}, batch_week: {batch_week}")
+
+#     context["ti"].xcom_push(key="batch_week", value=batch_week)
+#     context["ti"].xcom_push(key="batch_year", value=batch_year)
+
+# def extract_and_validate_source_task(**context) -> None:
+#     ti = context["ti"]
+
+#     batch_week = ti.xcom_pull(key="batch_week", task_ids="get_batch_week")
+#     batch_year = ti.xcom_pull(key="batch_year", task_ids="get_batch_week")
+
+#     if not batch_week or not batch_year:
+#         raise Exception({
+#             "status": "error",
+#             "message": "batch_week or batch_year from 'get_batch_week' XCom is None"
+#         })
+
+#     batch_week = str(batch_week)
+#     batch_year = str(batch_year)
+
+#     logger.info(f"extract_and_validate_source_task, batch_year: {batch_year}, batch_week: {batch_week}")
+
+#     if not isinstance(batch_week, str) or not isinstance(batch_year, str):
+#         raise InvalidArgumentTypeError("batch_week or batch_year from XCom is not a string type")
+
+#     extraction_status = extract_and_validate_source_data(
+#         aws_access_key,
+#         aws_secret_access,
+#         source_bucket,
+#         source_s3_key,
+#         raw_bucket,
+#         raw_bucket_weekly_dump_prefix,
+#         batch_year,
+#         batch_week,
+#         chunk_size,
+#         raw_data_schema,
+#     )
+
+#     if extraction_status["status"] != "success":
+#         raise Exception({
+#             "status": "error",
+#             "message": "Source data extraction and validation failed",
+#             "error": extraction_status["error"],
+#         })
+    
+#     extracted_dump_s3_key = extraction_status["extracted_dump_s3_key"]
+
+#     ti.xcom_push(key="extracted_dump_s3_key", value=extracted_dump_s3_key)
+#     logger.info({
+#         "status": "success",
+#         "message": "Source data extraction and validation succeeded",
+#         "extract_and_validate_status": extraction_status
+#     })
+
+# def load_data_to_raw_bucket_task(**context) -> None:
+#     ti = context['ti']
+#     extracted_dump_s3_key = ti.xcom_pull(key='extracted_dump_s3_key', task_ids='extract_and_validate_source_data')
+#     if not extracted_dump_s3_key:
+#         raise Exception({
+#             "status": "error",
+#             "message": "extracted_dump_s3_key from 'extract_and_validate_source_data' XCom is None"
+#         })
+    
+#     extracted_dump_s3_key = str(extracted_dump_s3_key)
+#     if not isinstance(extracted_dump_s3_key, str):
+#         raise InvalidArgumentTypeError("extracted_dump_s3_key must be a string type")
+
+#     batch_week = ti.xcom_pull(key='batch_week', task_ids='get_batch_week')
+#     batch_year = ti.xcom_pull(key='batch_year', task_ids='get_batch_week')
+#     if batch_week is None or batch_year is None:
+#         raise Exception({
+#             "status": "error",
+#             "message": "batch_week or batch_year from 'get_batch_week' Com is None"
+#         })
+
+#     batch_week = str(batch_week)
+#     batch_year = str(batch_year)
+
+#     if not isinstance(batch_week, str) or not isinstance(batch_year, str):
+#         raise InvalidArgumentTypeError("batch_week or batch_year must be string types")
+
+#     logger.info(f"load_data_to_raw_bucket_task, batch_year: {batch_year}, batch_week: {batch_week}")
+#     logger.info(f"load_data_to_raw_bucket_task, extracted_dump_s3_key: {extracted_dump_s3_key}")
+    
+#     load_to_raw_buk_obj = LoadToRawS3(S3_CONFIG)
+    
+#     load_to_raw_buk_obj.load_raw_data(
+#         extracted_dump_s3_key,
+#         batch_year,
+#         batch_week
+#     )
+
+# def process_raw_data_task(**context) -> None:
+#     ti = context['ti']
+#     extracted_dump_s3_key = ti.xcom_pull(key='extracted_dump_s3_key', task_ids='extract_and_validate_source_data')
+    
+#     if not extracted_dump_s3_key:
+#         raise Exception({
+#             "status": "error",
+#             "message": "extracted_dump_s3_key from 'extract_and_validate_source_data' XCom is None"
+#         })
+    
+#     extracted_dump_s3_key = str(extracted_dump_s3_key)
+#     if not isinstance(extracted_dump_s3_key, str):
+#         raise InvalidArgumentTypeError("extracted_dump_s3_key must be a string type")
+#     process_raw_data_obj = LoadToTransformedS3(s3_config = S3_CONFIG)   
+
+#     process_raw_data_status = process_raw_data_obj.process_raw_data(
+#         extracted_dump_s3_key=extracted_dump_s3_key,
+#         raw_data_schema=raw_data_schema
+#     )
+#     processed_s3_key = process_raw_data_status['processed_data_key']
+#     context['ti'].xcom_push(key='processed_s3_key', value=processed_s3_key)
+
+# def validate_processed_data_task(**context) -> None:
+#     ti = context['ti']
+#     processed_s3_key = ti.xcom_pull(key='processed_s3_key', task_ids='process_raw_data')
+    
+#     if not processed_s3_key:
+#         raise Exception({
+#             "status": "error",
+#             "message": "processed_s3_key from 'process_raw_data' XCom is None"
+#         })
+#     processed_s3_key = str(processed_s3_key)
+#     if not isinstance(processed_s3_key, str):
+#         raise InvalidArgumentTypeError("processed_s3_key must be a string type")
+    
+#     validate_processed_data_status = validate_processed_data(S3_CONFIG,
+#                                                               processed_s3_key)
+#     if validate_processed_data_status['status'] != 'success':
+#         raise Exception({
+#             "status": "error",
+#             "message": "Processed data validation failed",
+#             "error": validate_processed_data_status['error']
+#         })
+
+# def load_processed_data_to_s3_task(**context) -> None:
+    
+#     ti = context['ti']
+#     processed_s3_key = ti.xcom_pull(key='processed_s3_key', task_ids='process_raw_data')
+#     if not processed_s3_key:
+#         raise Exception({
+#             "status": "error",
+#             "message": "processed_s3_key from 'process_raw_data' XCom is None"
+#         })
+    
+#     processed_s3_key = str(processed_s3_key)
+#     if not isinstance(processed_s3_key, str):
+#         raise InvalidArgumentTypeError("processed_s3_key must be a string type")
+    
+#     load_processed_data_to_s3 = LoadToTransformedS3(S3_CONFIG).process_rides_with_partitioning(processed_s3_key)
+
+#     if load_processed_data_to_s3['status'] != 'success':
+#         raise Exception({
+#             "status": "error",
+#             "message": "Failed to upload processed data to transformed bucket",
+#             "error": load_processed_data_to_s3['error']
+#         })
+    
+#     logger.info({
+#         "status": "success",
+#         "message": "Successfully uploaded processed data to transformed bucket",
+#         "uploaded_records": load_processed_data_to_s3['uploaded_records'],
+#         "no_partitions": load_processed_data_to_s3['no_partitions']
+#     })
+
+# def load_snowflake_stage_to_staging_table_task(**context) -> None:
+#     load_to_snowflake = LoadTransformedDataToSnowflake(
+#         SNOWFLAKE_CONFIG,
+#         batch_year = str(context['ti'].xcom_pull(key='batch_year', task_ids='get_batch_week')),
+#         batch_week = str(context['ti'].xcom_pull(key='batch_week', task_ids='get_batch_week'))
+#     )
+#     copy_to_staging_status = load_to_snowflake.copy_to_staging_table()
+
+#     if copy_to_staging_status['status'] != 'success':
+#         raise Exception({
+#             "status": "error",
+#             "message": "Failed to load data from snowflake stage to staging table",
+#             "error": copy_to_staging_status['error']
+#         })
+
+# def merge_staging_to_raw_table_task(**context) -> None:
+#     load_to_snowflake = LoadTransformedDataToSnowflake(
+#         SNOWFLAKE_CONFIG,
+#         batch_year= str(context['ti'].xcom_pull(key='batch_year', task_ids='get_batch_week')),
+#         batch_week= str(context['ti'].xcom_pull(key='batch_week', task_ids='get_batch_week'))
+#     )
+#     merge_to_raw_target_status = load_to_snowflake.merge_to_target_table()
+
+#     if merge_to_raw_target_status['status'] != 'success':
+#         raise Exception({
+#             "status": "error",
+#             "message": "Failed to merge data from staging table to raw table in Snowflake",
+#             "error": merge_to_raw_target_status['error']
+#         })
