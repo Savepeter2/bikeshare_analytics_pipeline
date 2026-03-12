@@ -119,7 +119,7 @@ serviceAccount:
   create: true
   name: airflow-worker
   annotations:
-    eks.amazonaws.com/role-arn: "arn:aws:iam::356315793531:role/airflow-secrets-bucket-access-role"  # update this
+    eks.amazonaws.com/role-arn: "arn:aws:iam::356315793531:role/airflow-secrets-bucket-access-role"  
     
 
 env:
@@ -137,14 +137,8 @@ env:
     value: "CeleryExecutor"
   - name: AIRFLOW__CORE__AUTH_MANAGER
     value: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
-  - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
-    value: "postgresql+psycopg2://airflow:airflow@postgres/airflow"
-  - name: AIRFLOW__CELERY__RESULT_BACKEND
-    value: "db+postgresql://airflow:airflow@postgres/airflow"
   - name: AIRFLOW__CELERY__BROKER_URL
     value: "redis://:@redis:6379/0"
-  - name: AIRFLOW__CORE__FERNET_KEY
-    value: "62le5yBWBWnuNVr7woP86ClLTRLtJmGRnzghSpXbPP4="
   - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
     value: "true"
   - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
@@ -157,10 +151,6 @@ env:
     value: "false"
   - name: AIRFLOW__API_AUTH__JWT_EXPIRATION_TIME
     value: "259200"
-  - name: AIRFLOW__API_AUTH__JWT_SECRET
-    value: "5A9GBwq7Jx5zgIU/uB7yxQ=="
-  - name: AIRFLOW__API__SECRET_KEY
-    value: "LRT8Pix/goIOoSsa3vW/ZA=="
   - name: AIRFLOW__CELERY__WORKER_CONCURRENCY
     value: "2"
   - name: AIRFLOW__CELERY__WORKER_POOL
