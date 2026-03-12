@@ -195,4 +195,5 @@ dbt_internal_packages/
 #ci-cd files
 cd.yml
 deploy-k8s.yml  
+service-account.yaml
 
