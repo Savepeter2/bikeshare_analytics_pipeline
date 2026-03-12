@@ -2,9 +2,12 @@ name: CI Pipeline
 
 on:
   pull_request:
-    branches: [main, dev]
-  push:
-    branches: [dev]
+    # branches: [main, dev]
+    branches: [main]
+  # push:
+  #   branches: [feat/deploy-k8]
+    #branches: [dev]
+
 
 jobs:
   # test:

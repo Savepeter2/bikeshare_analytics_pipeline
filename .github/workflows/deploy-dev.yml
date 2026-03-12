@@ -77,10 +77,16 @@ jobs:
       # - name: Run smoke tests
       #   run: poetry run pytest tests/e2e/smoke_tests.py
       
-      
+
       - name: Notify Slack
         if: always()
-        uses: 8398a7/action-slack@v3
+        uses: slackapi/slack-github-action@v1.26.0
         with:
-          status: ${{ job.status }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          channel-id: "bikeshare_analytics_alerts"  
+          slack-message: |
+            *Bikeshare Pipeline Deploy* ${{ job.status == 'success' && '✅' || '❌' }}
+            *Branch:* ${{ github.ref_name }}
+            *Commit:* ${{ github.sha }}
+            *Status:* ${{ job.status }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_OAUTH_TOKEN }}
