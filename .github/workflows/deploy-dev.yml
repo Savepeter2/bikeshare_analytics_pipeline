@@ -12,7 +12,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: development
+    # environment: development
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
             --create-namespace \
             --wait      
       
-      
+
       - name: Sync DAGs to S3
         run: |
           aws s3 sync ./dags/ s3://bikeshare-pipeline-dev/dags/ \
