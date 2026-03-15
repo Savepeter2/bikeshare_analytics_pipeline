@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Debug OIDC token
-        run: |
-          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
-          echo $TOKEN | python3 -c "import sys,json,base64; token=json.load(sys.stdin)['value']; payload=token.split('.')[1]; print(json.loads(base64.b64decode(payload + '==').decode()))"
+      # - name: Debug OIDC token
+      #   run: |
+      #     TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+      #     echo $TOKEN | python3 -c "import sys,json,base64; token=json.load(sys.stdin)['value']; payload=token.split('.')[1]; print(json.loads(base64.b64decode(payload + '==').decode()))"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -88,7 +88,7 @@ jobs:
       #   run: poetry run pytest tests/e2e/smoke_tests.py
 
       - name: Notify Slack
-        if: always()
+        if: success() || failure()
         uses: slackapi/slack-github-action@v1.26.0
         with:
           channel-id: "bikeshare_analytics_alerts"  
