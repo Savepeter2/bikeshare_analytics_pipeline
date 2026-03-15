@@ -2,15 +2,26 @@ name: Deploy to Development
 
 on:
   push:
-    branches: [dev]
-  workflow_dispatch: 
+    branches: [feat/deploy-k8]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read 
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: development
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          roles-to-assume: arn:aws:iam::356315793531:role/github-actions-role
+          aws-region: us-east-1
       
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
