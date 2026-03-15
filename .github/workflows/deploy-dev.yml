@@ -12,10 +12,15 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # environment: development
+    environment: development
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      
+      - name: Debug OIDC token
+        run: |
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+          echo $TOKEN | python3 -c "import sys,json,base64; token=json.load(sys.stdin)['value']; payload=token.split('.')[1]; print(json.loads(base64.b64decode(payload + '==').decode()))"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
