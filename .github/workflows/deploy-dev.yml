@@ -20,7 +20,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          roles-to-assume: arn:aws:iam::356315793531:role/github-actions-role
+          role-to-assume: arn:aws:iam::356315793531:role/github-actions-role
           aws-region: us-east-1
       
       - name: Install kubectl
