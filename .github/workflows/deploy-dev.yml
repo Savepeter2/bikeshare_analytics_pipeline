@@ -77,7 +77,6 @@ jobs:
             --set images.airflow.tag=dev \
             --create-namespace \
             --wait      
-      
 
       - name: Sync DAGs to S3
         run: |
