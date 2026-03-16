@@ -72,6 +72,10 @@ jobs:
 
       - name: Apply ClusterSecretStore
         run: kubectl apply -f kubernetes/cluster-secret-store.yaml
+      
+      - name: Create Namespaces
+        run: |
+          kubectl create namespace bikeshare-dev-ns --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply ExternalSecrets
         run: |
