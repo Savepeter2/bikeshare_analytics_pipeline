@@ -46,6 +46,8 @@ jobs:
         run: |
           helm repo add external-secrets https://charts.external-secrets.io
           helm repo update
+          helm uninstall external-secrets -n external-secrets --ignore-not-found
+          kubectl delete namespace external-secrets --ignore-not-found
           helm upgrade --install external-secrets external-secrets/external-secrets \
             --namespace external-secrets-ns \
             --create-namespace \
