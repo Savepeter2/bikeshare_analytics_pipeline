@@ -56,6 +56,7 @@ jobs:
       - name: Wait for CRDs to be ready
         run: |
           kubectl wait --for=condition=established --timeout=60s \
+            crd/clustermsecretstores.external-secrets.io \
             crd/clustersecretstores.external-secrets.io \
             crd/externalsecrets.external-secrets.io
           
