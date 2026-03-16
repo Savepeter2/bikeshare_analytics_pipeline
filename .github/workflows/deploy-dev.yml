@@ -37,6 +37,11 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name bikeshare-dev-cluster --region us-east-1
       
+      - name: Test cluster connection
+        run: |
+          kubectl config view
+          kubectl get nodes
+      
       - name: Install External Secrets Operator
         run: |
           helm repo add external-secrets https://charts.external-secrets.io
