@@ -59,6 +59,10 @@ jobs:
             crd/externalsecrets.external-secrets.io
 
 
+      - name: Check CRDs
+        run: |
+          kubectl get crds | grep external-secrets
+
       - name: Apply ClusterSecretStore
         run: kubectl apply -f kubernetes/cluster-secret-store.yaml
 
