@@ -41,27 +41,32 @@ jobs:
         run: |
           kubectl config view
           kubectl get nodes
-      
 
       - name: Install External Secrets Operator
         run: |
           helm repo add external-secrets https://charts.external-secrets.io
           helm repo update
           helm upgrade --install external-secrets external-secrets/external-secrets \
-            --namespace external-secrets \
+            --namespace external-secrets-ns \
             --create-namespace \
             --wait
-      
+
       - name: Wait for CRDs to be ready
         run: |
           kubectl wait --for=condition=established --timeout=60s \
             crd/clustersecretstores.external-secrets.io \
             crd/externalsecrets.external-secrets.io
           sleep 10
-      
-      - name: Check service account
+
+      - name: Create External Secrets Service Account
         run: |
-          kubectl get serviceaccount -n external-secrets
+          kubectl create serviceaccount external-secrets-sa \
+            -n external-secrets-ns \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl annotate serviceaccount external-secrets-sa \
+            -n external-secrets-ns \
+            eks.amazonaws.com/role-arn=arn:aws:iam::356315793531:role/airflow-secrets-bucket-access-role \
+            --overwrite
 
       - name: Apply ClusterSecretStore
         run: kubectl apply -f kubernetes/cluster-secret-store.yaml
