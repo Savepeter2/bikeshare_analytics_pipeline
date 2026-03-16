@@ -46,13 +46,12 @@ jobs:
         run: |
           helm repo add external-secrets https://charts.external-secrets.io
           helm repo update
-          helm uninstall external-secrets -n external-secrets-ns
-          kubectl delete namespace external-secrets-ns
+          # helm uninstall external-secrets -n external-secrets-ns
+          # kubectl delete namespace external-secrets-ns
           helm upgrade --install external-secrets external-secrets/external-secrets \
             --namespace external-secrets-ns \
             --create-namespace \
             --set installCRDs=true
-            --wait
 
       - name: Wait for CRDs to be ready
         run: |
