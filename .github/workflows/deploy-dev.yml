@@ -105,7 +105,7 @@ jobs:
         run: |
           helm repo add apache-airflow https://airflow.apache.org
           helm repo update
-          helm install airflow apache-airflow/airflow \
+          helm upgrade --install airflow apache-airflow/airflow \
             --version 1.15.0 \
             -f kubernetes/dev-values.yaml \
             --namespace bikeshare-dev-ns \
