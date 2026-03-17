@@ -109,6 +109,7 @@ postgresql:
     existingSecret: airflow-core-secrets
     secretKeys:
       adminPasswordKey: POSTGRES_PASSWORD
+      userPasswordKey: POSTGRES_PASSWORD
 
 serviceAccount:
   create: true
