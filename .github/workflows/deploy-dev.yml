@@ -82,6 +82,11 @@ jobs:
           kubectl apply -f kubernetes/external-secrets/airflow-core-external-secret.yaml
           kubectl apply -f kubernetes/external-secrets/dbt-snowflake-external-secret.yaml
       
+      - name: Debug ExternalSecret
+        run: |
+          kubectl describe externalsecret airflow-core-secrets -n bikeshare-dev-ns
+          kubectl describe externalsecret bikeshare-dbt-secrets -n bikeshare-dev-ns
+      
       - name: Wait for ExternalSecrets to sync
         run: |
           kubectl wait externalsecret airflow-core-secrets \
