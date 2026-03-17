@@ -84,6 +84,11 @@ jobs:
         run: |
           kubectl describe externalsecret airflow-core-secrets -n bikeshare-dev-ns
           kubectl describe externalsecret bikeshare-dbt-secrets -n bikeshare-dev-ns
+
+      - name: Check the synced secrets
+        run: |
+          kubectl get secret airflow-core-secrets -n bikeshare-dev-ns -o yaml
+    
       
       - name: Wait for ExternalSecrets to sync
         run: |
