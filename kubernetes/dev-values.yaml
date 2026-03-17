@@ -133,8 +133,8 @@ env:
     value: "CeleryExecutor"
   - name: AIRFLOW__CORE__AUTH_MANAGER
     value: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
-  - name: AIRFLOW__CELERY__BROKER_URL
-    value: "redis://:@redis:6379/0"
+  # - name: AIRFLOW__CELERY__BROKER_URL
+  #   value: "redis://:@redis:6379/0"
   - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
     value: "true"
   - name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL
