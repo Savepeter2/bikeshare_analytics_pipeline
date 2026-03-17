@@ -73,19 +73,12 @@ jobs:
       - name: Apply ClusterSecretStore
         run: kubectl apply -f kubernetes/cluster-secret-store.yaml
       
+      - name: Debug ClusterSecretStore
+        run: kubectl describe clustersecretstore secrets-manager-store
+      
       - name: Create Namespaces
         run: |
           kubectl create namespace bikeshare-dev-ns --dry-run=client -o yaml | kubectl apply -f -
-      
-      - name: Create External Secrets Service Account
-        run: |
-          kubectl create serviceaccount external-secrets-sa \
-            -n external-secrets-ns \
-            --dry-run=client -o yaml | kubectl apply -f -
-          kubectl annotate serviceaccount external-secrets-sa \
-            -n external-secrets-ns \
-            eks.amazonaws.com/role-arn=arn:aws:iam::356315793531:role/airflow-secrets-bucket-access-role \
-            --overwrite
 
       - name: Apply ExternalSecrets
         run: |
