@@ -55,11 +55,6 @@ workers:
     limits:
       memory: "2Gi"
       cpu: "1000m"
-  envFrom:
-    - secretRef:
-        name: airflow-core-secrets
-    - secretRef:
-        name: bikeshare-dbt-secrets
 
 # =============================================================================
 # API Server (replaces Webserver in Airflow 3.x)
